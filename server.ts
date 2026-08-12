@@ -4,8 +4,14 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 
-// Definição compatível com CJS e ESM
-const __dirname_final = typeof __dirname !== "undefined" ? __dirname : dirname(fileURLToPath(import.meta.url));
+// Definição compatível com CJS e ESM sem usar import.meta diretamente
+const __dirname_final = typeof __dirname !== "undefined" ? __dirname : (() => {
+  try {
+    return dirname(fileURLToPath(typeof document === 'undefined' ? (typeof import.meta !== 'undefined' && import.meta.url ? import.meta.url : __filename) : __filename));
+  } catch (e) {
+    return process.cwd();
+  }
+})();
 
 // Determinação robusta do ambiente
 const IS_PROD =
