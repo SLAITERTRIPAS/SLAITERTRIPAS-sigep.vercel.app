@@ -15,6 +15,31 @@ export const isStructuredDept = (deptName: string) => {
   return !UNSTRUCTURED_DEPTS.includes(deptName);
 };
 
+export const isDPEPUser = (user: any): boolean => {
+  if (!user) return false;
+  if (isSuperBossUser(user)) return true;
+
+  const role = String(user.role || "").toLowerCase();
+  const title = String(user.title || "").toLowerCase();
+  const cargo = String(user.cargo || "").toLowerCase();
+  const cargoChefia = String(user.cargoChefia || "").toLowerCase();
+  const dept = String(user.departamento || "").toLowerCase();
+  const dir = String(user.direcao || "").toLowerCase();
+  const setor = String(user.setor || user.reparticao || "").toLowerCase();
+  const titulo = String(user.titulo || "").toLowerCase();
+
+  const combined = `${role} ${title} ${cargo} ${cargoChefia} ${dept} ${dir} ${setor} ${titulo}`;
+
+  return (
+    combined.includes("dpep") ||
+    combined.includes("planificação") ||
+    combined.includes("planificacao") ||
+    combined.includes("estudos e projetos") ||
+    combined.includes("estudos e projectos") ||
+    combined.includes("planificador")
+  );
+};
+
 export const canAccessArea = (
   user: any,
   targetDir: string,
@@ -23,8 +48,14 @@ export const canAccessArea = (
 ) => {
   if (!user) return false;
   
-  // Super Boss, Admin, etc can see everything
-  if (isSuperBossUser(user)) {
+  // Super Boss, Admin e DPEP (Departamento de Planificação) possuem soberania total sobre todas as áreas
+  if (isSuperBossUser(user) || isDPEPUser(user)) {
+    return true;
+  }
+
+  const roles = getRoles(user.title || user.cargo || user.cargoChefia || user.role || "");
+  // DG (Diretor Geral) e DC (Diretor Central) também são superiores centralizados
+  if (roles.isDG || roles.isDC) {
     return true;
   }
 
@@ -33,173 +64,150 @@ export const canAccessArea = (
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/^departamento\s+(de\s+|da\s+|dos\s+|do\s+)?/i, "")
-      .replace(/^direcao\s+(de\s+|da\s+|dos\s+|do\s+)?/i, "")
-      .replace(/^reparticao\s+(de\s+|da\s+|dos\s+|do\s+)?/i, "")
-      .replace(/^curso\s+(de\s+|da\s+|dos\s+|do\s+)?/i, "")
+      .replace(/ (departamento|depto|dep|reparticao|rep|setor|direcao|direccao|curso|divisao|unidade|de|do|da|dos|das) /g, " ")
+      .replace(/\s+/g, " ")
       .trim();
 
-  const role = norm(user.role || "");
-  const title = norm(user.title || user.cargo || user.cargoChefia || "");
-  const combinedRole = role + " " + title;
-
-  const uDir = norm(user.direcao || "");
   const uDept = norm(user.departamento || "");
   const uSector = norm(user.setor || user.reparticao || "");
-  
-  // Lista combinada de todas as áreas do utilizador
-  const userAreas = [uDir, uDept, uSector].filter(Boolean);
+  const isUserDCC = roles.isDCC;
 
-  const tDir = norm(targetDir || "");
   const tDept = norm(targetDept || "");
   const tSector = norm(targetSector || "");
 
-  // Se a direção do utilizador corresponde à direção da atividade
-  if (uDir && tDir && (tDir.includes(uDir) || uDir.includes(tDir) || tDir === uDir)) {
-    return true;
+  const isDCCArea = 
+    tDept.includes("dcc") || 
+    tDept.includes("curso") ||
+    tSector.includes("dcc") || 
+    tSector.includes("curso");
+
+  // "o plano do dcc, nunca deve ser visto por outros departamentos"
+  if (isDCCArea && !isUserDCC) {
+    return false;
   }
 
-  // Diretores Centrais / Chefes -> acessam Direções / Departamentos / Setores
-  if (combinedRole.includes("diretor") || combinedRole.includes("director") || combinedRole.includes("chefe")) {
-    if (tDir && userAreas.some(area => tDir.includes(area) || area.includes(tDir))) return true;
-    if (tDept && userAreas.some(area => tDept.includes(area) || area.includes(tDept) || area === tDept)) return true;
-    if (tSector && userAreas.some(area => tSector.includes(area) || area.includes(tSector) || area === tSector)) return true;
+  // "cada departamento e unico, e independente"
+  if (uDept && tDept) {
+    if (uDept !== tDept) {
+      return false; // Departamentos diferentes nunca cruzam dados
+    }
   }
 
-  if (tSector && userAreas.some(area => tSector.includes(area) || area.includes(tSector) || area === tSector)) return true;
-  if (tDept && userAreas.some(area => tDept.includes(area) || area.includes(tDept) || area === tDept)) return true;
-  if (tDir && userAreas.some(area => tDir.includes(area) || area.includes(tDir) || area === tDir)) return true;
+  if (uSector && tSector) {
+    if (uSector !== tSector) {
+      return false; // Setores diferentes dentro do departamento também não se cruzam
+    }
+  }
+
+  // Se passou em todas as regras de restrição estrita
+  if (uDept && tDept && uDept === tDept) return true;
+  if (uSector && tSector && uSector === tSector) return true;
 
   return false;
 };
 
 /**
- * Helper to get the numeric level of an activity status.
- */
-export const getActivityStatusLevel = (status: string): number => {
-  const s = (status || "").toLowerCase().trim();
-  if (s === "reparticao") return 2;
-  if (s === "departamento") return 3;
-  if (s === "direcao") return 4;
-  if (s === "planificacao" || s === "dpep_chefe" || s === "meritos") return 5;
-  if (s === "institucional") return 6;
-  return 1; // setorial, planeada, draft, etc.
-};
-
-/**
- * Helper to get the required status level for a user to see activities.
- */
-export const getUserRequiredStatusLevel = (user: any): number => {
-  if (!user) return 1;
-  const title = (user.title || user.cargo || user.cargoChefia || "").toLowerCase();
-  const dept = (user.departamento || "").toLowerCase();
-  const role = (user.role || "").toLowerCase();
-
-  const isDPEP =
-    title.includes("dpep") ||
-    dept.includes("dpep") ||
-    role.includes("dpep") ||
-    title.includes("planificação") ||
-    dept.includes("planificação") ||
-    role.includes("planificação") ||
-    title.includes("planeamento") ||
-    dept.includes("planeamento") ||
-    role.includes("planeamento");
-
-  const roles = getRoles(user.title || user.cargo || user.cargoChefia || "");
-
-  if (roles.isDG || isDPEP) {
-    return 5; // Top superiors: only see activities that have reached the "planificacao" status
-  }
-  if (roles.isDC) {
-    return 4; // Diretores: only see activities that have reached the "direcao" status
-  }
-  if (roles.isCD) {
-    return 3; // Chefes de Departamento: only see activities that have reached the "departamento" status
-  }
-  if (roles.isCR) {
-    return 2; // Chefes de Repartição: only see activities that have reached the "reparticao" status
-  }
-  return 1; // Normal users can see activities at any level (including setorial)
-};
-
-/**
  * Filters activities based on user permissions.
+ * O DPEP (DEPARTAMENTO DE PLANIFICAÇÃO ESTUDOS E PROJETOS), DIREÇÃO CENTRAL (DG/DC) E ADMINS TÊM ACESSO TOTAL SOBERANO SEM RESTRIÇÕES A TODOS OS PLANOS EM TEMPO REAL.
+ * FORA DISSO, CADA ORÇAMENTO É MANTIDO STRICTAMENTE NO SEU SETOR/DEPARTAMENTO PLANIFICADO.
  */
 export const getAuthorizedActivities = (activities: any[], user: any) => {
   if (!activities) return [];
   if (!user) return activities;
 
-  if (isSuperBossUser(user)) return activities;
-
+  const roles = getRoles(user.title || user.cargo || user.cargoChefia || user.role || "");
   const role = (user.role || "").toLowerCase();
+
   const isSysAdmin =
     role === "admin" ||
     role === "administrador" ||
     role === "administrador do sistema" ||
-    role === "administrador de sistema" ||
     role === "proprietario" ||
-    role === "proprietário" ||
-    user.isOwner === true ||
-    (user.categoria || "").toLowerCase().includes("programador");
+    user.isOwner === true;
+
+  // Órgão Máximo de Planificação e Direção Central (Diretor Geral, Diretor Central, SuperBoss, Admin, DPEP)
+  // Eles prestam contas ao mesmo superior, logo esses superiores têm acesso soberano de supervisão.
+  if (isSysAdmin || roles.isDG || roles.isDC || isSuperBossUser(user) || isDPEPUser(user)) {
+    return activities;
+  }
 
   const uEmail = String(user.email || "").toLowerCase();
   const uId = user.uid || user.id;
-  const uDept = String(user.departamento || "").toLowerCase().trim();
-  const uSector = String(user.setor || user.reparticao || "").toLowerCase().trim();
-  const uDir = String(user.direcao || "").toLowerCase().trim();
+
+  const norm = (s: string) =>
+    String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/ (departamento|depto|dep|reparticao|rep|setor|direcao|direccao|curso|divisao|unidade|de|do|da|dos|das) /g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const uDeptNorm = norm(user.departamento || "");
+  const uSetorNorm = norm(user.setor || user.reparticao || "");
+  const uCursoNorm = norm(user.curso || user.title || user.cargo || user.cargoChefia || "");
+
+  const isUserDCC = roles.isDCC;
 
   return activities.filter((a) => {
     if (!a) return false;
 
-    // As atividades sempre devem estar visíveis para o próprio criador
+    // O criador da atividade sempre pode visualizar a sua própria atividade
     const creator = String(a.createdBy || a.emailCriador || "").toLowerCase();
-    if ((creator && creator === uEmail) || (a.userId && uId && a.userId === uId)) return true;
-
-    // Administrador de Sistema tem acesso total para fins de suporte e debug
-    if (isSysAdmin) return true;
-
-    const aDir = String(a.direcao || "").trim();
-    const aDept = String(a.departamento || "").trim();
-    const aSector = String(a.setor || a.reparticao || "").trim();
-
-    // Se o utilizador tem permissão/jurisdição sobre a área (mesmo departamento/direção/curso), deve ver a atividade!
-    if (canAccessArea(user, aDir, aDept, aSector)) {
+    if ((creator && creator === uEmail) || (a.userId && uId && a.userId === uId)) {
       return true;
     }
 
-    const aDeptLower = aDept.toLowerCase();
-    const aSectorLower = aSector.toLowerCase();
+    const aDept = String(a.departamento || a.unidade || a.orgao || a.solicitante || a.origem || "").trim();
+    const aSector = String(a.setor || a.reparticao || "").trim();
+    const aCurso = String(a.curso || a.titulo || a.designacao || a.nome || "").trim();
 
-    // Se pertence ao mesmo departamento ou setor do usuário logado
-    const isSameDeptOrSector = 
-      (uDept && aDeptLower && (aDeptLower.includes(uDept) || uDept.includes(aDeptLower))) ||
-      (uSector && aSectorLower && (aSectorLower.includes(uSector) || uSector.includes(aSectorLower)));
+    const aDeptNorm = norm(aDept);
+    const aSectorNorm = norm(aSector);
+    const aCursoNorm = norm(aCurso);
 
-    // Se não for do mesmo departamento/setor, exige que esteja submetido/encaminhado (submetido === true ou status avançado)
-    if (!isSameDeptOrSector) {
-      const isSubmitted =
-        a.submetido === true ||
-        (a.status &&
-          a.status !== "setorial" &&
-          a.status !== "draft" &&
-          a.status !== "Não Submetido") ||
-        a.status === "pendente_monitoria";
-      if (!isSubmitted) return false;
+    const isDCCAct = 
+      aDeptNorm.includes("dcc") || 
+      aDeptNorm.includes("curso") ||
+      aSectorNorm.includes("dcc") || 
+      aSectorNorm.includes("curso") ||
+      aCursoNorm.includes("dcc") || 
+      aCursoNorm.includes("curso");
+
+    // "o plano do dcc, nunca deve ser visto por outros departamentos"
+    if (isDCCAct) {
+      // Se a atividade for do DCC, apenas outro utilizador DCC do mesmo curso ou com o mesmo departamento/curso de origem pode ver
+      if (!isUserDCC) {
+        return false;
+      }
+      
+      // Se o utilizador atual é DCC, verificar se coincide com o curso ou departamento específico
+      if (uCursoNorm && aCursoNorm && (uCursoNorm === aCursoNorm || aCursoNorm.includes(uCursoNorm) || uCursoNorm.includes(aCursoNorm))) {
+        return true;
+      }
+      if (uDeptNorm && aDeptNorm && uDeptNorm === aDeptNorm) {
+        return true;
+      }
+      return false;
     }
 
-    // Se estiver tramitado para o gabinete/área atual do usuário, conceder acesso
-    if (a.currentGabinete) {
-      const uArea = String(user.setor || user.reparticao || user.departamento || user.direcao || "").toLowerCase().trim();
-      const aGabinete = String(a.currentGabinete).toLowerCase();
-      if (uArea && (aGabinete.includes(uArea) || uArea.includes(aGabinete))) return true;
+    // "cada departamento e unico, e independente, so presta conta ao mesmo superior"
+    // Nenhum outro departamento pode ver planos que não sejam estritamente do seu próprio departamento.
+    if (uDeptNorm && aDeptNorm) {
+      if (uDeptNorm === aDeptNorm) {
+        // Se houver divisão por setores/repartições internos dentro do departamento
+        if (uSetorNorm && aSectorNorm) {
+          return uSetorNorm === aSectorNorm;
+        }
+        return true;
+      }
+      return false; // Se os departamentos forem diferentes, o acesso é negado
     }
 
-    const activityLevel = getActivityStatusLevel(a.status);
-    const requiredLevel = getUserRequiredStatusLevel(user);
-    
-    // Nível hierárquico mínimo para atividades de OUTRAS áreas
-    if (activityLevel < requiredLevel) return false;
+    // Se o utilizador tiver apenas setor/repartição sem departamento
+    if (uSetorNorm && aSectorNorm) {
+      return uSetorNorm === aSectorNorm;
+    }
 
     return false;
   });

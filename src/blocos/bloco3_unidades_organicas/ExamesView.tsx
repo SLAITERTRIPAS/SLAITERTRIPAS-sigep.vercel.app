@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { firestoreService } from "../../lib/firestoreService";
 import { printElementById } from "../../lib/printUtils";
-import { Calendar, BookOpen, Printer, CheckCircle, Clock, MapPin, User, FileText } from "lucide-react";
+import { Calendar, BookOpen, Printer, CheckCircle, Clock, MapPin, User, FileText, Shuffle, ShieldAlert } from "lucide-react";
 import ConfiguracaoExamesView from "./ConfiguracaoExamesView";
-import GeradorExamesView from "./GeradorExamesView";
+import GeradorExamesView, { isDocente, isChefiaDivisaoEngenharia } from "./GeradorExamesView";
 
 export default function ExamesView({ user, onShowAlert }: { user: any; onShowAlert: (msg: string) => void }) {
   const [periods, setPeriods] = useState<any>(null);
@@ -134,7 +134,7 @@ export default function ExamesView({ user, onShowAlert }: { user: any; onShowAle
               <h4 className="font-bold text-blue-900 text-sm">Resumo da Convocatória de Exames</h4>
               <p className="text-xs text-slate-600">Todas as disciplinas regulamentadas com exame obrigatório foram carregadas automaticamente.</p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 flex-wrap">
               <div className="flex gap-4">
                 <div className="text-center px-4 py-2 bg-white rounded-xl shadow-sm border">
                   <span className="block text-lg font-black text-blue-900">{disciplinasComExame.length}</span>
@@ -147,45 +147,124 @@ export default function ExamesView({ user, onShowAlert }: { user: any; onShowAle
               </div>
               <button
                 onClick={async () => {
+                  if (examesGerados.length === 0) {
+                    onShowAlert("Não existem exames agendados para baralhar vigilantes.");
+                    return;
+                  }
+                  const eligible = docentes.filter((d) => isDocente(d) && !isChefiaDivisaoEngenharia(d));
+                  if (eligible.length === 0) {
+                    onShowAlert("Não foram encontrados docentes elegíveis sem cargo de chefia na Divisão de Engenharia.");
+                    return;
+                  }
+                  try {
+                    const shuffledDocentes = [...eligible].sort(() => Math.random() - 0.5);
+                    let vIdx = 0;
+                    for (const exam of examesGerados) {
+                      const disc = disciplinasComExame.find((d) => d.id === exam.disciplina || d.nome === exam.disciplinaNome);
+                      const docId = disc?.docenteId;
+                      const docNome = disc?.docenteNome;
+
+                      let picked = shuffledDocentes.find((doc) => doc.id !== docId && doc.nome !== docNome);
+                      if (!picked) {
+                        picked = shuffledDocentes[vIdx % shuffledDocentes.length];
+                      }
+                      vIdx++;
+
+                      await firestoreService.exames.update(exam.id, {
+                        vigilante: picked.id,
+                        vigilanteNome: picked.nome,
+                      });
+                    }
+                    onShowAlert("Vigilantes baralhados com sucesso! Nenhum docente vigia a sua própria disciplina e chefias da Divisão de Engenharia foram excluídas.");
+                  } catch (err) {
+                    onShowAlert("Erro ao baralhar vigilantes.");
+                  }
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-3 rounded-xl text-xs font-bold shadow-md flex items-center gap-2 transition"
+                title="Baralhar e Distribuir Vigilantes sem Conflito de Interesses ou Chefias"
+              >
+                <Shuffle size={16} /> Baralhar Vigilantes
+              </button>
+              <button
+                onClick={async () => {
                   if (disciplinasComExame.length === 0) {
                     onShowAlert("Não existem disciplinas com exame para gerar.");
                     return;
                   }
                   try {
                     const defaultSala = salas[0]?.id || "Sala 101";
-                    const defaultVigilante = docentes[0]?.id || "";
-                    let count = 0;
+                    const eligibleDocentes = docentes.filter((d) => isDocente(d) && !isChefiaDivisaoEngenharia(d));
+
+                    const getBusinessDate = (startOffsetDays: number, index: number) => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + startOffsetDays);
+                      while (d.getDay() === 0 || d.getDay() === 6) {
+                        d.setDate(d.getDate() + 1);
+                      }
+                      let added = 0;
+                      while (added < index) {
+                        d.setDate(d.getDate() + 1);
+                        if (d.getDay() !== 0 && d.getDay() !== 6) {
+                          added++;
+                        }
+                      }
+                      return d;
+                    };
+
+                    const formatISO = (d: Date) => d.toISOString().split('T')[0];
+
+                    let discIdx = 0;
                     for (const disc of disciplinasComExame) {
-                      // Check if already has normal exam
+                      const normalDateObj = getBusinessDate(3, discIdx);
+                      const normalDateStr = formatISO(normalDateObj);
+
+                      const recDateObj = new Date(normalDateObj);
+                      recDateObj.setDate(recDateObj.getDate() + 7);
+                      while (recDateObj.getDay() === 0 || recDateObj.getDay() === 6) {
+                        recDateObj.setDate(recDateObj.getDate() + 1);
+                      }
+                      const recDateStr = formatISO(recDateObj);
+
+                      const validVigs = eligibleDocentes.filter(d => d.id !== disc.docenteId && d.nome !== disc.docenteNome);
+                      const assignedVig = validVigs[discIdx % Math.max(1, validVigs.length)] || eligibleDocentes[0] || docentes[0];
+
                       const existsNormal = examesGerados.find(e => e.disciplina === disc.id && e.tipo === "Normal");
                       if (!existsNormal) {
                         await firestoreService.exames.add({
                           tipo: "Normal",
                           disciplina: disc.id,
                           disciplinaNome: disc.nome,
-                          data: new Date(Date.now() + count * 86400000 * 2).toISOString().split('T')[0],
+                          data: normalDateStr,
+                          horario: "07:00 - 09:00",
+                          duracaoMinutos: 120,
+                          intervaloMinutos: 10,
                           sala: defaultSala,
-                          vigilante: defaultVigilante,
+                          vigilante: assignedVig?.id || "",
+                          vigilanteNome: assignedVig?.nome || "",
                           createdAt: new Date().toISOString(),
                         });
-                        count++;
                       }
-                      // Check if already has recorrência exam
+
                       const existsRec = examesGerados.find(e => e.disciplina === disc.id && e.tipo === "Recorrência");
                       if (!existsRec) {
                         await firestoreService.exames.add({
                           tipo: "Recorrência",
                           disciplina: disc.id,
                           disciplinaNome: disc.nome,
-                          data: new Date(Date.now() + (count + 5) * 86400000 * 2).toISOString().split('T')[0],
+                          data: recDateStr,
+                          horario: "09:10 - 11:10",
+                          duracaoMinutos: 120,
+                          intervaloMinutos: 10,
                           sala: defaultSala,
-                          vigilante: defaultVigilante,
+                          vigilante: assignedVig?.id || "",
+                          vigilanteNome: assignedVig?.nome || "",
                           createdAt: new Date().toISOString(),
                         });
-                        count++;
                       }
+
+                      discIdx++;
                     }
-                    onShowAlert("Calendário de exames Normais e de Recorrência gerado com sucesso!");
+                    onShowAlert("Calendário de exames gerado com atribuição de vigilantes em conformidade com o regulamento!");
                   } catch (err) {
                     onShowAlert("Erro ao gerar calendário automático.");
                   }
@@ -232,7 +311,12 @@ export default function ExamesView({ user, onShowAlert }: { user: any; onShowAle
                         <td className="p-3 text-slate-700">{doc ? doc.nome : "A definir"}</td>
                         <td className="p-3">
                           {exameMatch?.data ? (
-                            <span className="font-semibold text-blue-900">{exameMatch.data} ({exameMatch.tipo || "Normal"})</span>
+                            <div>
+                              <span className="font-bold text-blue-900 block">{exameMatch.data} ({exameMatch.tipo || "Normal"})</span>
+                              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 inline-block mt-0.5">
+                                ⏱️ {exameMatch.horario || "07:00 - 09:00"} (2h + 10m int)
+                              </span>
+                            </div>
                           ) : (
                             <span className="text-amber-600 italic">Pendente de Agendamento</span>
                           )}

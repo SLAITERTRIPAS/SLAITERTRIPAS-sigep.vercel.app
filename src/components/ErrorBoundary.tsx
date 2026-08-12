@@ -37,9 +37,11 @@ export class ErrorBoundary extends (React.Component as any) {
       errStr.includes("FIRESTORE") ||
       errStr.includes("INTERNAL ASSERTION FAILED") ||
       errStr.includes("Unexpected state") ||
-      errStr.includes("Could not reach Cloud Firestore")
+      errStr.includes("Could not reach Cloud Firestore") ||
+      errStr.includes("Converting circular structure to JSON") ||
+      errStr.includes("circular structure")
     ) {
-      // Auto-recuperação imediata para erros transitórios/internos do SDK Firestore
+      // Auto-recuperação imediata para erros transitórios/internos do SDK Firestore ou estruturas circulares
       setTimeout(() => {
         if ((this as any).state.hasError) {
           (this as any).setState({ hasError: false, error: null });
@@ -73,7 +75,9 @@ export class ErrorBoundary extends (React.Component as any) {
       const isFirestoreInternalError =
         errStr.includes("FIRESTORE") ||
         errStr.includes("INTERNAL ASSERTION FAILED") ||
-        errStr.includes("Unexpected state");
+        errStr.includes("Unexpected state") ||
+        errStr.includes("Converting circular structure to JSON") ||
+        errStr.includes("circular structure");
 
       if (isFirestoreInternalError) {
         // Se for erro interno do Firestore, tenta renderizar o conteúdo original enquanto auto-recupera em background

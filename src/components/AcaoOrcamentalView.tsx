@@ -18,7 +18,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { InstitutionalHeader } from "./InstitutionalHeader";
 import { printElementById } from "../lib/printUtils";
 import { UNIDADES_ORGANICAS_SISTEMA, DEPARTAMENTOS } from "../constants/formOptions";
-import { isSuperBossUser, canAccessArea, getAuthorizedActivities } from "../lib/auth";
+import { isSuperBossUser, canAccessArea, getAuthorizedActivities, isDPEPUser, getRoles } from "../lib/auth";
 
 interface AcaoOrcamentalViewProps {
   user: any;
@@ -399,7 +399,7 @@ const matchesDeptStr = (actVal?: string, targetVal?: string): boolean => {
   const normA = normalizeStr(actVal);
   const normT = normalizeStr(targetVal);
   if (!normA || !normT) return false;
-  return normA === normT;
+  return normA.includes(normT) || normT.includes(normA);
 };
 
 export default function AcaoOrcamentalView({
@@ -419,24 +419,8 @@ export default function AcaoOrcamentalView({
   const [selectedUnit, setSelectedUnit] = useState<string>("todos");
 
   const isPlanificacaoOrDPEP = useMemo(() => {
-    if (isSuperBossUser(user)) return true;
-    const userDept = String(
-      user?.departamento || user?.setor || user?.reparticao || "",
-    ).toUpperCase();
-    const userRole = String(user?.cargo || user?.role || "").toUpperCase();
-    const currentTitle = String(title || "").toUpperCase();
-    return (
-      userDept.includes("PLANIFICAÇÃO") ||
-      userDept.includes("PLANIFICACAO") ||
-      userDept.includes("DPEP") ||
-      userRole.includes("PLANIFICAÇÃO") ||
-      userRole.includes("PLANIFICACAO") ||
-      userRole.includes("DPEP") ||
-      currentTitle.includes("PLANIFICAÇÃO") ||
-      currentTitle.includes("PLANIFICACAO") ||
-      currentTitle.includes("DPEP")
-    );
-  }, [user, title]);
+    return isSuperBossUser(user) || isDPEPUser(user);
+  }, [user]);
 
   // Extrair unidades organizacionais por nível
   const levelUnits = useMemo(() => {
@@ -497,25 +481,35 @@ export default function AcaoOrcamentalView({
   }, [user, title]);
 
   const userDepartamento = useMemo(() => {
-    return user?.departamento || title || "Departamento";
+    if (user?.departamento) return user.departamento;
+    const userRoleStr = String(user?.title || user?.cargo || user?.cargoChefia || "");
+    if (userRoleStr.includes("Construção Civil") || userRoleStr.includes("Civil")) {
+      return "Departamento de Engenharia de Construção Civil";
+    }
+    if (title && title !== "Ação Orçamental" && title !== "Orçamento" && title !== "Plano Setorial") {
+      return title;
+    }
+    return "Departamento";
   }, [user, title]);
+
+  const roles = useMemo(() => getRoles(user?.title || user?.cargo || user?.cargoChefia || user?.role || ""), [user]);
+  const isCentralDirector = isSuperBossUser(user) || roles.isDG || roles.isDC;
 
   React.useEffect(() => {
     if (isPlanificacaoOrDPEP || isSuperBossUser(user)) {
       setSelectedLevel("institucional");
       setSelectedUnit("todos");
+    } else if (isCentralDirector) {
+      setSelectedLevel("direcao");
+      setSelectedUnit(userDirecao);
+    } else if (user?.setor || user?.reparticao) {
+      setSelectedLevel("setor");
+      setSelectedUnit(user?.setor || user?.reparticao);
     } else {
-      const roleStr = String(user?.cargo || user?.title || user?.role || user?.cargoChefia || "").toLowerCase();
-      const isDirector = roleStr.includes("diretor") || roleStr.includes("director");
-      if (isDirector) {
-        setSelectedLevel("direcao");
-        setSelectedUnit(userDirecao);
-      } else {
-        setSelectedLevel("departamento");
-        setSelectedUnit(userDepartamento);
-      }
+      setSelectedLevel("departamento");
+      setSelectedUnit(userDepartamento);
     }
-  }, [title, isPlanificacaoOrDPEP, user, userDirecao, userDepartamento]);
+  }, [isPlanificacaoOrDPEP, user, isCentralDirector, userDirecao, userDepartamento]);
 
   // Resetar a unidade selecionada quando muda o nível
   const handleLevelChange = (
@@ -528,34 +522,11 @@ export default function AcaoOrcamentalView({
 
   // Filtrar atividades conforme o Nível Estrutural e a Unidade Selecionada
   const sectorActivities = useMemo(() => {
-    let baseActivities = activities;
+    let baseActivities = getAuthorizedActivities(activities, user);
 
-    // Se o utilizador não for da Planificação / DPEP, restringe à sua área (Departamento estrito ou Direção)
+    // Se o utilizador não for da Planificação / DPEP, o escopo já está perfeitamente delimitado e seguro via getAuthorizedActivities
     if (!isPlanificacaoOrDPEP) {
-      const roleStr = String(user?.cargo || user?.title || user?.role || user?.cargoChefia || "").toLowerCase();
-      const isDirector = roleStr.includes("diretor") || roleStr.includes("director");
-
-      // STRICT AUTHORIZATION ENFORCEMENT FIRST
-      // This ensures a department cannot see another department's budget
-      baseActivities = getAuthorizedActivities(activities, user);
-
-      if (isDirector && userDirecao) {
-        // Direção: visualiza e consolida o orçamento de todos os departamentos sob a alçada da direção
-        baseActivities = baseActivities.filter((act) =>
-          matchesUnitStr(act.direcao || act.direccao || act.unidadeOrganica, userDirecao) ||
-          canAccessArea(user, act.direcao || "", act.departamento || "", act.setor || "")
-        );
-      } else if (userDepartamento) {
-        // Cada Departamento possui orçamento próprio (soma isolada das suas atividades)
-        baseActivities = baseActivities.filter((act) =>
-          matchesDeptStr(act.departamento, userDepartamento) ||
-          (!act.departamento && (
-            matchesDeptStr(act.solicitante, userDepartamento) ||
-            matchesDeptStr(act.unidade, userDepartamento) ||
-            matchesDeptStr(act.orgao, userDepartamento)
-          ))
-        );
-      }
+      return baseActivities;
     }
 
     if (selectedLevel === "institucional") {
@@ -604,7 +575,7 @@ export default function AcaoOrcamentalView({
 
       return matchesUnitStr(act.departamento, selectedUnit);
     });
-  }, [activities, selectedLevel, selectedUnit, isPlanificacaoOrDPEP, user, userDirecao, userDepartamento]);
+  }, [activities, selectedLevel, selectedUnit, isPlanificacaoOrDPEP, user]);
 
   // Total Geral do valor de todas as atividades planificadas (Orçamento do Nível/Departamento)
   const totalOrcamentadoSetor = useMemo(() => {
@@ -2036,7 +2007,7 @@ export default function AcaoOrcamentalView({
                       📌 Por Setor
                     </button>
                   </>
-                ) : (
+                ) : isCentralDirector ? (
                   <>
                     <button
                       onClick={() => {
@@ -2049,9 +2020,8 @@ export default function AcaoOrcamentalView({
                           : "bg-white text-slate-700 hover:bg-slate-200/70 border border-slate-200"
                       }`}
                     >
-                      🏢 Por Direção: {userDirecao}
+                      🏢 Órgão de Direção Central: {userDirecao}
                     </button>
-
                     <button
                       onClick={() => {
                         setSelectedLevel("departamento");
@@ -2063,14 +2033,20 @@ export default function AcaoOrcamentalView({
                           : "bg-white text-slate-700 hover:bg-slate-200/70 border border-slate-200"
                       }`}
                     >
-                      📂 Por Departamento: {userDepartamento}
+                      📂 Departamento: {userDepartamento}
                     </button>
                   </>
+                ) : (
+                  <button
+                    className="px-3.5 py-2 rounded-xl text-xs font-black bg-sky-800 text-white shadow-md whitespace-nowrap shrink-0 cursor-default"
+                  >
+                    📂 Orçamento Mantido no Setor Planificado: {user?.setor || user?.reparticao || userDepartamento}
+                  </button>
                 )}
               </div>
 
               {/* Seletor da Unidade Conforme o Nível Escolhido */}
-              {selectedLevel !== "institucional" && (isPlanificacaoOrDPEP || selectedLevel === "departamento" || (DEPARTAMENTOS[userDirecao] || []).length > 1) && (
+              {selectedLevel !== "institucional" && (isPlanificacaoOrDPEP || isCentralDirector) && (
                 <div className="flex items-center gap-2 w-full md:w-auto">
                   <label className="text-xs font-bold text-slate-600 whitespace-nowrap">
                     {selectedLevel === "direcao" ? "Por Direção:" : "Departamento:"}

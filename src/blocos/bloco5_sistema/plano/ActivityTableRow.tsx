@@ -589,56 +589,6 @@ export const ActivityTableRow = React.memo(function ActivityTableRow({
                   })
                 : "-"}
             </td>
-
-            {/* IX. OBSERVAÇÕES */}
-            <td
-              className="p-2 border-r border-slate-300 text-[10px] text-slate-400 font-medium w-24 leading-snug"
-              rowSpan={rubricas.length}
-              hidden={rIdx > 0}
-            >
-              {activity.observacoes || "-"}
-            </td>
-
-            {/* Estado */}
-            <td
-              className="p-1 border-r border-slate-300 text-center w-16"
-              rowSpan={rubricas.length}
-              hidden={rIdx > 0}
-            >
-              <div className="flex items-center justify-center gap-1">
-                <span
-                  className={`text-[8px] font-black uppercase px-2 py-1 rounded-full border shadow-sm ${
-                    activity.status === "institucional" || activity.status === "consolidated"
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : activity.status === "direcao"
-                        ? "bg-blue-50 text-blue-700 border-blue-200"
-                        : activity.status === "departamento"
-                          ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                          : "bg-slate-50 text-slate-500 border-slate-200"
-                  }`}
-                >
-                  {activity.status || "draft"}
-                </span>
-                {Array.isArray(activity.workflowHistory) && activity.workflowHistory.length > 0 && (
-                  <button
-                    onClick={() => onViewHistory?.(activity)}
-                    className="p-1.5 bg-indigo-600 text-white rounded-lg shadow-lg hover:bg-indigo-700 transition-all active:scale-90"
-                    title="Ver Histórico de Tramitação e Assinaturas"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                  </button>
-                )}
-              </div>
-            </td>
-
-            {/* Ações */}
-            <td
-              className="p-1 text-center w-14"
-              rowSpan={rubricas.length}
-              hidden={rIdx > 0}
-            >
-              {actions}
-            </td>
           </tr>
         );
       })}

@@ -417,6 +417,12 @@ export const getActivityGroup = (activity: any, list: any[]) => {
     // Devem pertencer ao mesmo ano
     if ((a.ano || 2026) !== (activity.ano || 2026)) return false;
 
+    // Se pertencerem ao mesmo departamento/repartição
+    const sameDept = (a.departamento || "") === (activity.departamento || "");
+    const sameSector =
+      (a.setor || a.reparticao || "") ===
+      (activity.setor || activity.reparticao || "");
+
     // Se partilharem a mesma referência ou código
     const sameRef =
       activity.referencia &&
@@ -427,13 +433,7 @@ export const getActivityGroup = (activity: any, list: any[]) => {
       a.codigoAtividade &&
       String(activity.codigoAtividade).trim() ===
         String(a.codigoAtividade).trim();
-    if (sameRef || sameCode) return true;
-
-    // Se pertencerem ao mesmo departamento/repartição
-    const sameDept = (a.departamento || "") === (activity.departamento || "");
-    const sameSector =
-      (a.setor || a.reparticao || "") ===
-      (activity.setor || activity.reparticao || "");
+    if ((sameRef || sameCode) && sameDept) return true;
 
     // Se tiverem o mesmo número de atividade calculado no mesmo departamento/setor
     const aNo = getActivityDisplayNo(a);

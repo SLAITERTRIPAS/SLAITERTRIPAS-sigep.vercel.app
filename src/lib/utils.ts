@@ -1,6 +1,41 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+// Global safety patch for JSON.stringify to handle circular structures (e.g. minified SDK objects Y2, Ka, etc.)
+if (typeof window !== "undefined" && !(window as any).__sigep_json_patch__) {
+  (window as any).__sigep_json_patch__ = true;
+  const originalStringify = JSON.stringify;
+  JSON.stringify = function (value: any, replacer?: any, space?: any) {
+    try {
+      return originalStringify.call(JSON, value, replacer, space);
+    } catch (err: any) {
+      if (
+        err &&
+        (err.name === "TypeError" || String(err).includes("TypeError")) &&
+        (String(err?.message || err).toLowerCase().includes("circular"))
+      ) {
+        const seen = new WeakSet();
+        const safeReplacer = function (this: any, key: string, val: any) {
+          if (val !== null && typeof val === "object") {
+            if (seen.has(val)) return "[Circular]";
+            seen.add(val);
+          }
+          if (typeof replacer === "function") {
+            return replacer.call(this, key, val);
+          }
+          return val;
+        };
+        try {
+          return originalStringify.call(JSON, value, safeReplacer, space);
+        } catch (e) {
+          return '"[Circular Structure]"';
+        }
+      }
+      throw err;
+    }
+  };
+}
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -73,7 +108,7 @@ export function sanitizeForJSON(obj: any, seen = new WeakSet()): any {
     }
   }
 
-  // Firestore Timestamp
+  // Firestore Timestamp or objects with .toDate()
   if (typeof obj.toDate === "function") {
     try {
       return obj.toDate().toISOString();
@@ -82,29 +117,28 @@ export function sanitizeForJSON(obj: any, seen = new WeakSet()): any {
     }
   }
 
-  // Detect Firebase / DOM / React internals / Non-plain objects
+  // Detect Firebase / DOM / React internals / Non-plain dangerous objects
   const isDangerous = (o: any) => {
     try {
       if (!o || typeof o !== "object") return false;
-      
-      // Known Firebase minified/internal names or patterns
+
+      // React / DOM / Events
+      if (o.$$typeof || o.nodeType || o.nativeEvent || o._owner || o._store) return true;
+
+      // Firebase / Firestore / Auth internal SDK instances
+      if (
+        o._firestore || o.firestore || o._delegate || o._auth || o.auth || o._key || o._document
+      ) return true;
+
       const cName = o.constructor?.name;
       if (
-        o.$$typeof || // React
-        o.nodeType || // DOM
-        o.nativeEvent || // Event
-        o._firestore || o.firestore || 
-        o._delegate || o._auth || o.auth ||
-        (cName && (
-          cName === 'Y2' || 
-          cName === 'Ka' ||
-          cName === 'DocumentReference' ||
-          cName === 'CollectionReference' ||
-          cName === 'Query' ||
-          cName === 'Firestore' ||
-          cName === 'Auth' ||
-          cName === 'UserImpl'
-        ))
+        cName === "DocumentReference" ||
+        cName === "CollectionReference" ||
+        cName === "Query" ||
+        cName === "Firestore" ||
+        cName === "Auth" ||
+        cName === "UserImpl" ||
+        cName === "FirebaseApp"
       ) {
         return true;
       }
@@ -121,7 +155,7 @@ export function sanitizeForJSON(obj: any, seen = new WeakSet()): any {
     try {
       if (obj.path) return String(obj.path);
       if (obj.id) return String(obj.id);
-      if (obj.uid) return { uid: obj.uid, email: obj.email };
+      if (obj.uid) return { uid: String(obj.uid), email: obj.email ? String(obj.email) : undefined };
     } catch (e) {
       // ignore
     }
@@ -141,7 +175,7 @@ export function sanitizeForJSON(obj: any, seen = new WeakSet()): any {
     for (const key of keys) {
       // Skip private-looking properties unless it's _id
       if (key.startsWith("_") && key !== "_id") continue;
-      
+
       try {
         const val = obj[key];
         const sanitized = sanitizeForJSON(val, seen);
@@ -155,7 +189,7 @@ export function sanitizeForJSON(obj: any, seen = new WeakSet()): any {
   } catch (e) {
     return "[Object]";
   }
-  
+
   return cleanObj;
 }
 
@@ -171,14 +205,23 @@ export const getCircularReplacer = () => {
     if (type === "object") {
       if (seen.has(value)) return "[Circular]";
       seen.add(value);
-      
-      // Basic check for special objects
+
       try {
         const cName = value.constructor?.name;
         if (
-          value.$$typeof || value.nodeType || value.nativeEvent ||
-          value._firestore || value.firestore || value._delegate || value.auth ||
-          (cName && (cName === 'Y2' || cName === 'Ka' || cName === 'DocumentReference'))
+          value.$$typeof ||
+          value.nodeType ||
+          value.nativeEvent ||
+          value._firestore ||
+          value.firestore ||
+          value._delegate ||
+          value.auth ||
+          cName === "DocumentReference" ||
+          cName === "CollectionReference" ||
+          cName === "Query" ||
+          cName === "Firestore" ||
+          cName === "Auth" ||
+          cName === "UserImpl"
         ) {
           if (value.path) return String(value.path);
           if (value.id) return String(value.id);
@@ -200,24 +243,32 @@ export function safeJSONStringify(
   try {
     // 1. First pass: deep sanitization to remove non-JSON objects and cycles
     const cleanObj = sanitizeForJSON(obj);
-    
+
     // 2. Second pass: JSON stringify with a circular replacer as backup
-    if (typeof replacer === "function") {
-      return JSON.stringify(cleanObj, (k, v) => {
-        // Combine our logic with the custom replacer
-        const processed = getCircularReplacer()(k, v);
-        return replacer(k, processed);
-      }, space);
-    }
-    
-    return JSON.stringify(cleanObj, getCircularReplacer(), space);
+    const circularReplacer = getCircularReplacer();
+    const finalReplacer = typeof replacer === "function"
+      ? (k: string, v: any) => replacer(k, circularReplacer(k, v))
+      : circularReplacer;
+
+    return JSON.stringify(cleanObj, finalReplacer, space);
   } catch (err) {
     console.warn("safeJSONStringify fallback triggered:", err);
     try {
-      // 3. Last resort: just stringify the String representation
-      return JSON.stringify(String(obj));
+      const fallbackSeen = new WeakSet();
+      return JSON.stringify(obj, (_k, v) => {
+        if (typeof v === "object" && v !== null) {
+          if (fallbackSeen.has(v)) return "[Circular]";
+          fallbackSeen.add(v);
+        }
+        if (typeof v === "function" || typeof v === "symbol") return undefined;
+        return v;
+      }, space);
     } catch (e) {
-      return "\"Error during stringification\"";
+      try {
+        return JSON.stringify(String(obj));
+      } catch (e2) {
+        return '"Error during stringification"';
+      }
     }
   }
 }
@@ -454,6 +505,27 @@ export function normalize(text: string): string {
   );
 
   return n.trim();
+}
+
+export function normalizeSectorName(str?: string): string {
+  if (!str) return "";
+  let n = String(str)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  n = n
+    .replace(
+      /^(departamento|setor|sector|reparticao|repartição|curso|divisao|divisão|direcao|direção|servico|serviço|gabinete|unidade)\s+(de|da|do|dos|das)?\s+/g,
+      ""
+    )
+    .replace(/^(de|da|do|dos|das)\s+/g, "")
+    .trim();
+
+  return n;
 }
 
 export function isMatch(input: string, compareTo: string): boolean {

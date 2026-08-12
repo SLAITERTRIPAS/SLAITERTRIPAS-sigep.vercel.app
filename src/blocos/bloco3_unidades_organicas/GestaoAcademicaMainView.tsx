@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Users, Clock, BookOpen, Building, FlaskConical, Wrench, GraduationCap, ClipboardList, BookMarked, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Users, Clock, BookOpen, Building, FlaskConical, Wrench, GraduationCap, ClipboardList, BookMarked, PanelLeftClose, PanelLeftOpen, UserCheck } from "lucide-react";
 import GestaoAcademicaView from "./GestaoAcademicaView";
 import HorarioView from "./HorarioView";
 import GestaoEstudantilView from "./GestaoEstudantilView";
@@ -14,6 +14,7 @@ export default function GestaoAcademicaMainView({ title, user, onBack, onShowAle
   const subMenuItems = [
     { title: "Docentes", icon: Users },
     { title: "Alocação", icon: ClipboardList },
+    { title: "Gestão Estudantil", icon: UserCheck },
     { title: "Horário", icon: Clock },
     { title: "Calendário de Exame", icon: BookMarked },
     { title: "Graduados", icon: GraduationCap },
@@ -29,6 +30,8 @@ export default function GestaoAcademicaMainView({ title, user, onBack, onShowAle
         return <GestaoAcademicaView title={title} user={user} onBack={onBack} initialShowList={true} />;
       case "Alocação":
         return <GestaoAcademicaView title={title} user={user} onBack={onBack} />;
+      case "Gestão Estudantil":
+        return <GestaoEstudantilView user={user} onBack={onBack} title="Gestão Estudantil" />;
       case "Horário":
         return <HorarioView title={title} user={user} />;
       case "Calendário de Exame":

@@ -623,6 +623,7 @@ export default function GestaoProdutosPrecosView() {
           setProductState={setEditingProduct}
           onSubmit={handleSaveEdit}
           onCancel={() => setEditingProduct(null)}
+          isEditing={true}
         />
       )}
 
@@ -635,6 +636,7 @@ export default function GestaoProdutosPrecosView() {
           setProductState={setNewProduct}
           onSubmit={handleAddNew}
           onCancel={() => setIsAddingNew(false)}
+          isEditing={false}
         />
       )}
     </div>
@@ -648,6 +650,7 @@ interface ProductFormPassoVIIProps {
   setProductState: (val: any) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
+  isEditing?: boolean;
 }
 
 function ProductFormPassoVIIModal({
@@ -657,6 +660,7 @@ function ProductFormPassoVIIModal({
   setProductState,
   onSubmit,
   onCancel,
+  isEditing = false,
 }: ProductFormPassoVIIProps) {
   const cleanKey = (productState.necessidade || "").replace(/^\d+\s*-\s*/, "").trim();
   const catalogProducts = PRODUTOS_POR_NECESSIDADE[cleanKey] || [];
@@ -743,6 +747,7 @@ function ProductFormPassoVIIModal({
                 </label>
                 <div className="space-y-2.5">
                   <select
+                    disabled={isEditing}
                     value={
                       catalogProducts.some((p) => p.nome === productState.nome)
                         ? productState.nome
@@ -764,9 +769,15 @@ function ProductFormPassoVIIModal({
                         });
                       }
                     }}
-                    className="w-full px-4 py-3 bg-white border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 transition-all shadow-sm appearance-none"
+                    className={`w-full px-4 py-3 border border-blue-900/15 rounded-2xl text-[13px] font-bold outline-none transition-all shadow-sm appearance-none ${
+                      isEditing
+                        ? "bg-slate-100 text-slate-400 cursor-not-allowed opacity-70"
+                        : "bg-white text-slate-800 focus:border-blue-900"
+                    }`}
                     style={{
-                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%231e3a8a' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                      backgroundImage: isEditing
+                        ? "none"
+                        : `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%231e3a8a' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
                       backgroundPosition: "right 1rem center",
                       backgroundRepeat: "no-repeat",
                       backgroundSize: "1em 1em",
@@ -786,22 +797,22 @@ function ProductFormPassoVIIModal({
                   <input
                     type="text"
                     value={productState.nome || ""}
-                    placeholder="Ou digite o nome do produto..."
+                    placeholder="Nome do produto..."
                     onChange={(e) =>
                       setProductState({ ...productState, nome: e.target.value })
                     }
-                    className="w-full px-4 py-3 bg-white border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 transition-all shadow-sm"
+                    className="w-full px-4 py-3 bg-white border border-blue-900/20 rounded-2xl text-[13px] font-bold text-slate-900 outline-none focus:border-blue-900 transition-all shadow-sm"
                   />
                 </div>
                 <p className="text-[9px] text-blue-800/60 italic leading-tight mt-1.5 flex items-center gap-1">
-                  💡 Apenas produtos registados na Gestão de Produtos são listados aqui.
+                  {isEditing ? "✏️ Modo de edição: O nome do produto está livre para alteração direta acima." : "💡 Apenas produtos registados na Gestão de Produtos são listados aqui."}
                 </p>
               </div>
 
-              {/* Coluna 2: DETALHES / UNIDADE */}
+              {/* Coluna 2: DETALHES */}
               <div className="xl:col-span-1 space-y-2.5">
                 <label className="block text-[10px] font-black text-[#1e3a8a] uppercase tracking-widest mb-1.5">
-                  DETALHES / UNIDADE
+                  DETALHES
                 </label>
                 <select
                   value={productState.unidade || "Unidade"}
@@ -817,19 +828,22 @@ function ProductFormPassoVIIModal({
                   }}
                 >
                   {[
-                    "Unidade",
                     "Lote",
-                    "Global",
                     "Kit",
+                    "Embalagem",
+                    "Unidade",
+                    "Kilograma",
+                    "Saco",
+                    "Pacote",
+                    "Caixa",
+                    "Barra",
+                    "Global",
                     "Mês",
                     "Trimestre",
                     "Ano",
-                    "Kg",
                     "Litro",
                     "Metro",
                     "Resma",
-                    "Caixa",
-                    "Pacote",
                   ].map((opt) => (
                     <option key={opt} value={opt}>
                       {opt}

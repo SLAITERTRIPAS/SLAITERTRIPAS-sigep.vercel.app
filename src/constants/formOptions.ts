@@ -387,7 +387,7 @@ export const CURSOS: Record<string, string[]> = {
   "Departamento TIC": ["Informática", "Redes"],
   "Departamento Lar de Estudantes": ["Gestão de Alojamento"],
   "Departamento de Produção Alimentar": ["Gestão de Cantinas"],
-  "Departamento de Registo Académico": ["Gestão Académica"],
+  "Departamento de Registo Académico": ["Gestão Académica", "Gestão Estudantil"],
   "Departamento de Assuntos Estudantis": ["Apoio ao Estudante"],
   "Departamento de Biblioteca": ["Gestão de Informação"],
 };

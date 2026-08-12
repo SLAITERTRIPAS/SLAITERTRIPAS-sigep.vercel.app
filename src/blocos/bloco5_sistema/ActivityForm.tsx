@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { getUserWorkspace } from "../../lib/auth";
+import { getUserWorkspace, isDPEPUser } from "../../lib/auth";
 import {
   ChevronRight,
   ChevronLeft,
@@ -61,6 +61,7 @@ import {
   getDistanciaSongo,
   getCircularReplacer,
   safeJSONStringify,
+  normalizeSectorName,
 } from "../../lib/utils";
 
 import SearchableSelect from "../../components/ui/SearchableSelect";
@@ -100,17 +101,12 @@ const getFilteredProductsForRubrica = (
   const normRub = (rubricaName || "").toLowerCase().trim();
   const normNec = (necessidadeName || "").toLowerCase().trim();
 
-  // Extrair código numérico de Rubrica (ex: 121, 122, 112, 1434)
-  const rubCode = normRub.match(/\d+/)?.[0];
-  
-  // Extrair nome limpo da Necessidade sem códigos numéricos iniciais
   const cleanNec = normNec.replace(/^\d+\s*[-_.]?\s*/, "").trim();
   const necCode = normNec.match(/^(\d+)/)?.[1];
+  const rubCode = normRub.match(/\d+/)?.[0];
 
-  // Agrupar produtos por nível de correspondência
   const exactNecMatches: any[] = [];
   const categoryMatches: any[] = [];
-  const otherMatches: any[] = [];
 
   productsList.forEach((p: any) => {
     const pRub = (p.rubrica || "").toLowerCase();
@@ -132,46 +128,70 @@ const getFilteredProductsForRubrica = (
 
     // 2. Verificação de correspondência na Categoria / Rubrica
     const isCatMatch =
-      (rubCode && (pRubCode === rubCode || pCat.includes(rubCode) || pRub.includes(rubCode))) ||
-      (normRub.includes("bens") && (pRub.includes("bens") || pCat.includes("121") || pRub.includes("121"))) ||
-      (normRub.includes("serviços") && (pRub.includes("serviços") || pCat.includes("122") || pRub.includes("122"))) ||
-      (normRub.includes("pessoal") && (pRub.includes("pessoal") || pCat.includes("112") || pRub.includes("112"))) ||
-      (normRub.includes("transferência") && (pRub.includes("transferência") || pCat.includes("1434") || pRub.includes("1434")));
+      (rubCode && (pRubCode === rubCode || pCat.includes(rubCode) || pRub.includes(rubCode)));
 
     if (isCatMatch) {
       categoryMatches.push(p);
-      return;
     }
-
-    otherMatches.push(p);
   });
 
-  // Se houver produtos que batem com a necessidade ou categoria, retorne-os
-  if (exactNecMatches.length > 0 || categoryMatches.length > 0) {
-    return [...exactNecMatches, ...categoryMatches];
+  // Se uma necessidade foi selecionada, retornar SOMENTE os produtos daquela necessidade (sem fallback)
+  if (cleanNec || necCode) {
+    return exactNecMatches;
   }
 
-  // Fallback seguro: retorne a lista inteira de produtos da base de dados
-  return productsList;
+  // Se apenas rubrica/categoria foi selecionada
+  if (rubCode && categoryMatches.length > 0) {
+    return categoryMatches;
+  }
+
+  return [];
 };
 
 function calculateNextNum(acts: any[], targetSector?: string, currentUserArea?: string): number {
   let maxNum = 0;
-  const sectorFilter = (targetSector || currentUserArea || "").trim().toLowerCase();
-  
+  const cleanSector = (targetSector || "").trim();
+  const cleanUserArea = (currentUserArea || "").trim();
+
+  const genericTerms = [
+    "plano de atividades", "plano setorial", "diretor geral", "admin", "administrador", 
+    "dpep", "geral", "isps", "geral / isps", "todos", "plano do departamento"
+  ];
+
+  let effectiveSector = cleanSector;
+  if (!effectiveSector || genericTerms.includes(effectiveSector.toLowerCase())) {
+    effectiveSector = cleanUserArea;
+  }
+
+  const normTarget = normalizeSectorName(effectiveSector);
+
   if (acts && Array.isArray(acts)) {
     acts.forEach((act: any) => {
-      if (sectorFilter && sectorFilter !== "plano de atividades" && sectorFilter !== "plano setorial" && sectorFilter !== "diretor geral" && sectorFilter !== "admin" && sectorFilter !== "dpep" && sectorFilter !== "geral") {
-        const actDir = String(act.direcao || "").trim().toLowerCase();
-        const actDept = String(act.departamento || act.unidadeOrganica || "").trim().toLowerCase();
-        const actRep = String(act.reparticao || "").trim().toLowerCase();
-        const actSetor = String(act.setor || act.sector || "").trim().toLowerCase();
-        const combinedActArea = `${actDir} ${actDept} ${actRep} ${actSetor}`;
-        
-        if (!combinedActArea.includes(sectorFilter) && !sectorFilter.includes(actDept) && !sectorFilter.includes(actSetor) && !sectorFilter.includes(actRep)) {
+      if (normTarget && !genericTerms.includes(effectiveSector.toLowerCase())) {
+        const actDept = String(act.departamento || act.unidadeOrganica || "").trim();
+        const actSetor = String(act.setor || act.sector || "").trim();
+        const actRep = String(act.reparticao || "").trim();
+        const actCurso = String(act.curso || "").trim();
+        const actDir = String(act.direcao || "").trim();
+
+        const normDept = normalizeSectorName(actDept);
+        const normSetor = normalizeSectorName(actSetor);
+        const normRep = normalizeSectorName(actRep);
+        const normCurso = normalizeSectorName(actCurso);
+        const normDir = normalizeSectorName(actDir);
+
+        const isMatch =
+          (normDept && (normTarget.includes(normDept) || normDept.includes(normTarget))) ||
+          (normSetor && (normTarget.includes(normSetor) || normSetor.includes(normTarget))) ||
+          (normRep && (normTarget.includes(normRep) || normRep.includes(normTarget))) ||
+          (normCurso && (normTarget.includes(normCurso) || normCurso.includes(normTarget))) ||
+          (normDir && (normTarget.includes(normDir) || normDir.includes(normTarget)));
+
+        if (!isMatch) {
           return;
         }
       }
+
       const numStr = act.numeroAtividade || act.nAtividade || act.no;
       if (numStr) {
         const parsed = parseInt(String(numStr).replace(/\D/g, ""), 10);
@@ -427,24 +447,7 @@ export default function ActivityForm({
     : new Date().getFullYear() + 1;
 
   const isDPEP = useMemo(() => {
-    if (!user) return false;
-    const titleUpper = (
-      user.title ||
-      user.cargo ||
-      user.cargoChefia ||
-      ""
-    ).toUpperCase();
-    const deptUpper = (user.departamento || "").toUpperCase();
-    const roleUpper = (user.role || "").toUpperCase();
-    return (
-      titleUpper.includes("DPEP") ||
-      deptUpper.includes("DPEP") ||
-      roleUpper.includes("DPEP") ||
-      titleUpper.includes("PLANIFICAÇÃO") ||
-      deptUpper.includes("PLANIFICAÇÃO") ||
-      user.role === "admin" ||
-      user.role === "proprietario"
-    );
+    return isDPEPUser(user);
   }, [user]);
 
   const getMonthNumber = (monthName: string): string => {
@@ -1584,11 +1587,16 @@ export default function ActivityForm({
       formData.departamento,
     ).toUpperCase();
 
-    const targetArea = sectorName || formData.departamento || formData.setor || (user ? getUserWorkspace(user) : "");
-    const rawNum =
-      formData.numeroAtividade || String(calculateNextNum(plannedActivitiesProp, targetArea, user ? getUserWorkspace(user) : ""));
-    const parsedNum = parseInt(rawNum, 10);
-    const num = isNaN(parsedNum) ? rawNum : String(parsedNum).padStart(3, "0");
+    const targetArea = formData.departamento || formData.setor || formData.reparticao || formData.curso || sectorName || (user ? getUserWorkspace(user) : "");
+
+    let num = formData.numeroAtividade;
+    if (!initialData?.id && (!initialData?.numeroAtividade || initialData?.numeroAtividade === "001")) {
+      const calculatedNext = calculateNextNum(plannedActivitiesProp, targetArea, user ? getUserWorkspace(user) : "");
+      num = String(calculatedNext).padStart(3, "0");
+    } else {
+      const parsedNum = parseInt(num || "1", 10);
+      num = isNaN(parsedNum) ? (num || "001") : String(parsedNum).padStart(3, "0");
+    }
 
     const actInitials = getActivityInitials(formData.nomeAtividade || "");
 
@@ -1615,11 +1623,14 @@ export default function ActivityForm({
     formData.unidadeSelecionada,
     selectedCategory,
     formData.departamento,
-    formData.curso,
+    formData.setor,
     formData.reparticao,
+    formData.curso,
     formData.nomeAtividade,
-    formData.numeroAtividade,
     plannedActivitiesProp,
+    sectorName,
+    user,
+    initialData,
   ]);
 
   // Loose match helper for user session pre-population
@@ -5820,10 +5831,10 @@ export default function ActivityForm({
                                 </p>
                               </div>
 
-                              {/* Coluna 2: UNIDADE (1 coluna) */}
+                              {/* Coluna 2: DETALHES */}
                               <div className="xl:col-span-1 space-y-2.5">
                                 <label className="block text-[10px] font-black text-[#1e3a8a] uppercase tracking-widest mb-1.5">
-                                  DETALHES / UNIDADE
+                                  DETALHES
                                 </label>
                                 <select
                                   value={rubrica.detalhes || "Unidade"}
@@ -5841,7 +5852,24 @@ export default function ActivityForm({
                                     backgroundSize: "0.9em 0.9em",
                                   }}
                                 >
-                                  {["Unidade", "Lote", "Global", "Kit", "Mês", "Trimestre", "Ano", "Kg", "Litro", "Metro", "Resma", "Caixa", "Pacote"].map(opt => (
+                                  {[
+                                    "Lote",
+                                    "Kit",
+                                    "Embalagem",
+                                    "Unidade",
+                                    "Kilograma",
+                                    "Saco",
+                                    "Pacote",
+                                    "Caixa",
+                                    "Barra",
+                                    "Global",
+                                    "Mês",
+                                    "Trimestre",
+                                    "Ano",
+                                    "Litro",
+                                    "Metro",
+                                    "Resma",
+                                  ].map(opt => (
                                     <option key={opt} value={opt}>{opt}</option>
                                   ))}
                                 </select>

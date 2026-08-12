@@ -10,7 +10,7 @@ export const ActivityTableHeader = React.memo(function ActivityTableHeader({
   isAllSelected?: boolean;
 }) {
   return (
-    <thead className="bg-[#4f81bd] text-white text-[10px] uppercase font-black tracking-tight text-center align-middle">
+    <thead className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight text-center align-middle">
       <tr className="border-t-2 border-slate-950">
         <th
           className="p-1 border-2 border-slate-950 whitespace-nowrap w-8 text-center"
@@ -37,7 +37,7 @@ export const ActivityTableHeader = React.memo(function ActivityTableHeader({
           N/O
         </th>
         <th
-          className="p-1 border-2 border-slate-950 whitespace-nowrap w-12 text-center text-[10px] bg-indigo-900"
+          className="p-1 border-2 border-slate-950 whitespace-nowrap w-12 text-center text-[10px] bg-cyan-850 bg-[#155e75]"
           rowSpan={2}
         >
           Nº Direção
@@ -71,24 +71,6 @@ export const ActivityTableHeader = React.memo(function ActivityTableHeader({
           colSpan={5}
         >
           VII. RUBRICAS E NECESSIDADES
-        </th>
-        <th
-          className="p-1 border-2 border-slate-950 font-black tracking-widest text-[10px] w-24"
-          rowSpan={2}
-        >
-          IX. OBSERVAÇÕES
-        </th>
-        <th
-          className="p-1 border-2 border-slate-950 font-black tracking-widest text-[10px] w-16 text-center"
-          rowSpan={2}
-        >
-          Estado
-        </th>
-        <th
-          className="p-1 border-2 border-slate-950 font-black tracking-widest text-[10px] w-14 text-center"
-          rowSpan={2}
-        >
-          Ações
         </th>
       </tr>
       <tr>

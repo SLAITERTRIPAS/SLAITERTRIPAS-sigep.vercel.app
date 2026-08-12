@@ -29,7 +29,7 @@ export default function DisciplinasEspacosFisicosView({
     semestre: "1º Semestre",
     nivel: "1º ano",
     turma: "EE1",
-    cargaSemanal: "12h",
+    cargaSemanal: "4h",
   });
 
   const departamentoCursosMap: Record<string, string[]> = {
@@ -72,7 +72,21 @@ export default function DisciplinasEspacosFisicosView({
       setDisciplinasList(data || []);
     });
     const unsubColab = firestoreService.colaboradores.subscribe((data: any[]) => {
-      setDocentes((data || []).filter((d: any) => d.tipo === "Docente"));
+      const isDocente = (d: any) => {
+        if (!d) return false;
+        const t = String(d.tipo || "").toLowerCase();
+        const c = String(d.carreira || "").toLowerCase();
+        const f = String(d.funcao || d.cargo || d.cargoChefia || "").toLowerCase();
+        return (
+          t.includes("docente") ||
+          c.includes("docente") ||
+          f.includes("docente") ||
+          f.includes("profess") ||
+          f.includes("assistente") ||
+          (Array.isArray(d.disciplinas) && d.disciplinas.length > 0)
+        );
+      };
+      setDocentes((data || []).filter(isDocente));
     });
     return () => {
       unsubDisc();
@@ -112,7 +126,7 @@ export default function DisciplinasEspacosFisicosView({
         semestre: "1º Semestre",
         nivel: "1º ano",
         turma: "EE1",
-        cargaSemanal: "12h",
+        cargaSemanal: "4h",
       });
       setShowForm(false);
     } catch (err) {
@@ -185,7 +199,7 @@ export default function DisciplinasEspacosFisicosView({
             semestre: "1º Semestre",
             nivel: "1º ano",
             turma: "EE1",
-            cargaSemanal: "12h",
+            cargaSemanal: "4h",
           });
             setShowForm(!showForm);
           }}
@@ -274,21 +288,21 @@ export default function DisciplinasEspacosFisicosView({
                 onChange={(e) => setFormData({ ...formData, cargaSemanal: e.target.value })}
                 className="w-full p-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               >
+                <option value="2h">2h</option>
+                <option value="3h">3h</option>
                 <option value="4h">4h</option>
+                <option value="5h">5h</option>
                 <option value="6h">6h</option>
+                <option value="7h">7h</option>
                 <option value="8h">8h</option>
-                <option value="10h">10h</option>
-                <option value="12h">12h</option>
-                <option value="14h">14h</option>
-                <option value="16h">16h</option>
               </select>
             </div>
 
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-slate-700 mb-1 tracking-tight">Nome da Disciplina *</label>
-              <input
-                type="text"
+              <textarea
                 required
+                rows={3}
                 value={formData.nome}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -341,6 +355,17 @@ export default function DisciplinasEspacosFisicosView({
                 <option value="sem_exame">📖 Disciplina sem Exame</option>
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1 tracking-tight">Tipo de Aula</label>
+              <select
+                value={formData.tipoAula}
+                onChange={(e) => setFormData({ ...formData, tipoAula: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none bg-indigo-50 text-indigo-900"
+              >
+                <option value="Dupla (100 min)">Dupla (100 min)</option>
+                <option value="Simples (50 min)">Simples (50 min)</option>
+              </select>
+            </div>
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t">
             <button
@@ -380,7 +405,8 @@ export default function DisciplinasEspacosFisicosView({
                   <th className="p-3">Curso / Dept / Semestre</th>
                   <th className="p-3">Nível / Turma / Carga</th>
                   <th className="p-3">Docente Atribuído</th>
-                  <th className="p-3">Classificação Exame</th>
+                  <th className="p-3">Class. Exame</th>
+                  <th className="p-3">Tipo Aula</th>
                   <th className="p-3 text-right">Ações</th>
                 </tr>
               </thead>

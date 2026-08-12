@@ -12,9 +12,11 @@ if (typeof window !== "undefined") {
       msg.includes("FIRESTORE") ||
       msg.includes("INTERNAL ASSERTION FAILED") ||
       msg.includes("Unexpected state") ||
-      msg.includes("Could not reach Cloud Firestore backend")
+      msg.includes("Could not reach Cloud Firestore backend") ||
+      msg.includes("Converting circular structure to JSON") ||
+      msg.includes("circular structure")
     ) {
-      console.warn("🛡️ Intercetado e suprimido erro interno do Firestore:", msg);
+      console.warn("🛡️ Intercetado e suprimido erro interno do Firestore/circular:", msg);
       event.preventDefault();
       event.stopImmediatePropagation();
     }
@@ -27,9 +29,11 @@ if (typeof window !== "undefined") {
       msg.includes("FIRESTORE") ||
       msg.includes("INTERNAL ASSERTION FAILED") ||
       msg.includes("Unexpected state") ||
-      msg.includes("Could not reach Cloud Firestore backend")
+      msg.includes("Could not reach Cloud Firestore backend") ||
+      msg.includes("Converting circular structure to JSON") ||
+      msg.includes("circular structure")
     ) {
-      console.warn("🛡️ Intercetada e suprimida rejeição interna do Firestore:", msg);
+      console.warn("🛡️ Intercetada e suprimida rejeição interna do Firestore/circular:", msg);
       event.preventDefault();
       event.stopImmediatePropagation();
     }

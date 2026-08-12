@@ -884,12 +884,6 @@ export default function GestaoAcademicaView({
         </div>
         <div className="flex gap-3">
           <button
-            onClick={() => setShowRegistrationForm(true)}
-            className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs tracking-[0.2em] shadow-xl shadow-slate-900/20 hover:bg-slate-800 transition-all flex items-center gap-2"
-          >
-            <UserPlus2 size={18} /> Registar Docente
-          </button>
-          <button
             onClick={() => setShowDocenteList(!showDocenteList)}
             className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs tracking-[0.2em] shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center gap-2"
           >
@@ -1042,25 +1036,15 @@ export default function GestaoAcademicaView({
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (!isHeadOfPersonnel) {
-                                          setAlertMessage(
-                                            "Apenas o Chefe da Repartição de Pessoal pode gerir disciplinas.",
-                                          );
-                                          return;
-                                        }
                                         setShowDisciplinasModal(true);
                                       }}
-                                      className={`w-full px-4 py-3 text-left text-[10px] font-black tracking-widest flex items-center gap-2 transition-colors border-b border-slate-900 ${!isHeadOfPersonnel ? "text-slate-600 cursor-not-allowed" : "hover:bg-slate-900"}`}
+                                      className="w-full px-4 py-3 text-left text-[10px] font-black tracking-widest flex items-center gap-2 transition-colors border-b border-slate-900 hover:bg-slate-900"
                                     >
                                       <BookOpen
                                         size={14}
-                                        className={
-                                          !isHeadOfPersonnel
-                                            ? "text-slate-700"
-                                            : "text-blue-400"
-                                        }
+                                        className="text-blue-400"
                                       />{" "}
-                                      Alocar Disciplina
+                                      Atribuir Cadeira Semestral / Disciplina
                                     </button>
                                     <button className="w-full px-4 py-3 text-left text-[10px] font-black tracking-widest hover:bg-slate-900 flex items-center gap-2 transition-colors">
                                       <Users
@@ -1085,20 +1069,14 @@ export default function GestaoAcademicaView({
                             {isAllocatedToThis && (
                               <button
                                 onClick={() => {
-                                  if (!isHeadOfPersonnel) {
-                                    setAlertMessage(
-                                      "Apenas o Chefe da Repartição de Pessoal pode gerir disciplinas.",
-                                    );
-                                    return;
-                                  }
                                   setSelectedDocenteId(docente.id);
                                   setShowDisciplinasModal(true);
                                 }}
-                                className={`text-[9px] font-bold transition-colors tracking-widest mt-1 text-left ${!isHeadOfPersonnel ? "text-slate-300" : "text-blue-400 hover:text-blue-600"}`}
+                                className="text-[9px] font-bold transition-colors tracking-widest mt-1 text-left text-blue-500 hover:text-blue-700"
                               >
                                 {alocForThis?.disciplina
-                                  ? "Alterar disciplina"
-                                  : "Definir disciplina"}
+                                  ? "Alterar cadeira semestral"
+                                  : "Atribuir cadeira semestral"}
                               </button>
                             )}
                           </div>
@@ -1116,15 +1094,13 @@ export default function GestaoAcademicaView({
                                 <span className="text-[9px] font-black tracking-tighter">
                                   {aloc.curso.replace("Diretor do ", "")}
                                 </span>
-                                {isHeadOfPersonnel && (
-                                  <button
-                                    onClick={() => handleDeallocate(aloc.id!)}
-                                    className="ml-1 hover:text-red-500"
-                                    title="Remover Alocação"
-                                  >
-                                    <Trash2 size={10} />
-                                  </button>
-                                )}
+                                <button
+                                  onClick={() => handleDeallocate(aloc.id!)}
+                                  className="ml-1 hover:text-red-500"
+                                  title="Remover Alocação"
+                                >
+                                  <Trash2 size={10} />
+                                </button>
                               </div>
                             ))}
                             {docAllocations.length === 0 && (
@@ -1236,17 +1212,11 @@ export default function GestaoAcademicaView({
                       </div>
                       <button
                         onClick={() => {
-                          if (!isHeadOfPersonnel) {
-                            setAlertMessage(
-                              "Apenas o Chefe da Repartição de Pessoal pode gerir disciplinas.",
-                            );
-                            return;
-                          }
                           setSelectedDocenteId(docente.id);
                           setShowDisciplinasModal(true);
                         }}
                         className="p-2 text-slate-400 hover:text-blue-600 transition-colors"
-                        title="Gestão de Disciplina"
+                        title="Atribuir Cadeira Semestral / Disciplina"
                       >
                         <BookOpen size={16} />
                       </button>

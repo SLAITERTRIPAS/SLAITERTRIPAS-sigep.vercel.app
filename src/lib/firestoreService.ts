@@ -1393,7 +1393,8 @@ export const firestoreService = {
       for (const act of allActs) {
         const name = (act.title || act.designacao || act.nomeAtividade || "").trim().toLowerCase();
         const code = (act.codigoAtividade || act.referencia || "").trim().toLowerCase();
-        const key = `${code}::${name}`;
+        const dept = (act.departamento || act.unidadeOrganica || "Geral").trim().toLowerCase();
+        const key = `${code}::${name}::${dept}`;
         if (name && code && seenActs.has(key)) {
           await deleteDoc(doc(db, "actividades", act.id));
           actDeletedCount++;
