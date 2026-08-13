@@ -207,6 +207,12 @@ export function openPrintDocumentWindow(options: PrintDocumentOptions) {
         ? ""
         : `
     <div style="text-align: center; border-bottom: 4px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px; font-family: 'Times New Roman', serif;">
+      <!-- Identificação do Orgão e Direção -->
+      <div style="background-color: #f1f5f9; padding: 10px; margin-bottom: 15px; border: 1px solid #e2e8f0; font-size: 12px; font-weight: bold; color: #1e293b; text-transform: uppercase; display: flex; justify-content: center; gap: 20px;">
+        <span>ÓRGÃO: ${resolvedOrgao}</span>
+        ${direcao ? `<span>DIREÇÃO: ${direcao}</span>` : ""}
+      </div>
+
       <div style="margin-bottom: 15px;">
         <img src="https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad" alt="Logo ISPS" style="height: 100px; object-fit: contain;" />
       </div>
@@ -221,8 +227,6 @@ export function openPrintDocumentWindow(options: PrintDocumentOptions) {
       </h3>
       
       <div style="margin-top: 12px; border-top: 1px solid #e2e8f0; padding-top: 8px;">
-        ${resolvedOrgao ? `<h4 style="font-size: 14px; font-weight: 900; text-transform: uppercase; margin: 2px 0; color: #0f172a;">${resolvedOrgao}</h4>` : ""}
-        ${direcao ? `<h4 style="font-size: 14px; font-weight: bold; text-transform: uppercase; margin: 2px 0; color: #1e3a8a;">${direcao}</h4>` : ""}
         ${divisao ? `<h4 style="font-size: 13px; font-weight: bold; text-transform: uppercase; margin: 2px 0; color: #1e3a8a;">${divisao}</h4>` : ""}
         ${departamento ? `<h4 style="font-size: 13px; font-weight: bold; text-transform: uppercase; margin: 2px 0; color: #1e3a8a;">${departamento}</h4>` : ""}
         ${reparticao || setor ? `<h4 style="font-size: 13px; font-weight: bold; text-transform: uppercase; margin: 2px 0; color: #1e3a8a;">${[reparticao, setor].filter(Boolean).join(" - ")}</h4>` : ""}
@@ -433,6 +437,20 @@ export function openPrintDocumentWindow(options: PrintDocumentOptions) {
       <div class="a4-container" id="print-container" ${printType ? `data-print-type="${printType}"` : ""}>
         ${defaultHeader}
         ${contentHtml}
+        
+        <!-- Rodapé do Documento -->
+        <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-family: 'Times New Roman', serif;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div style="text-align: center; width: 40%;">
+              <div style="border-top: 1px solid #0f172a; padding-top: 5px; font-size: 11px; font-weight: bold; text-transform: uppercase;">
+                Assinatura/Carimbo
+              </div>
+            </div>
+            <div style="text-align: right; font-size: 10px; color: #64748b;">
+              Documento descarregado em: ${new Date().toLocaleDateString('pt-MZ')} às ${new Date().toLocaleTimeString('pt-MZ', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          </div>
+        </div>
       </div>
 
       <script>

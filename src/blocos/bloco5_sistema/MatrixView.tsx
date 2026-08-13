@@ -9,6 +9,7 @@ import {
   Target,
   Edit,
   Upload,
+  X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { motion, AnimatePresence } from "motion/react";
@@ -116,7 +117,98 @@ export default function MatrixView({
   const [editingActivity, setEditingActivity] = useState<MatrixActivity | null>(
     null,
   );
+  const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
+  const onToggleSelect = (id: string) => {
+    setSelectedActivityIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleBatchDelete = async () => {
+    setShowBatchDeleteConfirm(true);
+  };
+
+  const confirmBatchDelete = async () => {
+    
+    try {
+      for (const id of selectedActivityIds) {
+        if (onDeleteActivity) {
+          onDeleteActivity(id);
+        } else {
+          await firestoreService.matrixActivities.delete(id);
+        }
+      }
+      setSelectedActivityIds([]);
+      if (typeof (window as any).onShowAlert === "function") {
+         (window as any).onShowAlert("excluiu as atividades selecionadas com sucesso");
+      } else {
+         alert("excluiu as atividades selecionadas com sucesso");
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'summary' | 'rubrica'>('table');
+  
+  const groupedNecessidades = useMemo(() => {
+    const groups: Record<string, { originalName: string, total: number, activities: any[] }> = {};
+    
+    activities.forEach(activity => {
+      const rubricas = activity.rubricas || [{ rubrica: activity.rubrica, necessidade: activity.necessidade, valorTotal: activity.valor }];
+      
+      rubricas.forEach(r => {
+        if (!r.necessidade) return;
+        const originalName = r.necessidade.trim();
+        const normalized = normalizeString(originalName.toLowerCase());
+        if (!groups[normalized]) {
+          groups[normalized] = { originalName, total: 0, activities: [] };
+        }
+        groups[normalized].total += (r.valorTotal || 0);
+        groups[normalized].activities.push({ ...activity, itemRubrica: r });
+      });
+    });
+    return groups;
+  }, [activities]);
+
+  const groupedByRubrica = useMemo(() => {
+    const groups: Record<string, { total: number, needs: Record<string, { total: number, activities: any[] }> }> = {};
+
+    activities.forEach(activity => {
+      const rubricas = activity.rubricas || [{ rubrica: activity.rubrica, necessidade: activity.necessidade, valorTotal: activity.valor }];
+      rubricas.forEach(r => {
+        if (!r.rubrica) return;
+        const rubricName = r.rubrica.trim();
+        if (!groups[rubricName]) {
+          groups[rubricName] = { total: 0, needs: {} };
+        }
+        groups[rubricName].total += (r.valorTotal || 0);
+
+        const needName = r.necessidade?.trim() || "Sem Necessidade";
+        if (!groups[rubricName].needs[needName]) {
+          groups[rubricName].needs[needName] = { total: 0, activities: [] };
+        }
+        groups[rubricName].needs[needName].total += (r.valorTotal || 0);
+        groups[rubricName].needs[needName].activities.push({ ...activity, itemRubrica: r });
+      });
+    });
+    return groups;
+  }, [activities]);
+
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [expandedNeeds, setExpandedNeeds] = useState<Record<string, boolean>>({});
+  
+  const toggleGroup = (name: string) => {
+    setExpandedGroups(prev => ({ ...prev, [name]: !prev[name] }));
+  };
+
+  const toggleNeed = (rubricName: string, needName: string) => {
+    const key = `${rubricName}-${needName}`;
+    setExpandedNeeds(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     console.log("File upload triggered");
@@ -547,30 +639,44 @@ export default function MatrixView({
               : "Defina as diretrizes estratégicas para os planos setoriais das direções."}
           </p>
         </div>
-        {(title.includes("Plano") || title.includes("Matriz")) &&
-          title !== "Minha Matriz" &&
-          title !== "Plano Setorial" &&
-          title !== "Plano Institucional" && (
+        {title !== "Minha Matriz" &&
+          title !== "Plano Setorial" && (
             <div className="flex flex-col md:flex-row gap-3">
               <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full md:w-auto bg-emerald-600 text-white px-4 md:px-6 py-2 md:py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 whitespace-nowrap"
+                onClick={() => setViewMode(prev => prev === 'table' ? 'summary' : prev === 'summary' ? 'rubrica' : 'table')}
+                className="w-full md:w-auto bg-slate-100 text-slate-700 px-4 md:px-6 py-2 md:py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-all shadow-lg shadow-slate-100 whitespace-nowrap"
               >
-                <Upload size={20} /> IMPORTAR EXCEL
+                {viewMode === 'table' ? 'RESUMO POR NECESSIDADE' : viewMode === 'summary' ? 'RESUMO POR RÚBRICA' : 'LISTA DETALHADA'}
               </button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileUpload}
-                accept=".xlsx, .xls"
-                style={{ display: "none" }}
-              />
-              <button
-                onClick={() => setShowForm(true)}
-                className="w-full md:w-auto bg-blue-600 text-white px-4 md:px-6 py-2 md:py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 whitespace-nowrap"
-              >
-                <Plus size={20} /> NOVO PLANO DE ATIVIDADE
-              </button>
+              {(title.includes("Plano") || title.includes("Matriz")) && (
+                <>
+                  <button
+                    onClick={handleBatchDelete}
+                    className="w-full md:w-auto bg-red-600 text-white px-4 md:px-6 py-2 md:py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-700 transition-all shadow-lg shadow-red-100 whitespace-nowrap"
+                  >
+                    <Trash2 size={20} /> EXCLUIR SELECIONADOS
+                  </button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full md:w-auto bg-emerald-600 text-white px-4 md:px-6 py-2 md:py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 whitespace-nowrap"
+                  >
+                    <Upload size={20} /> IMPORTAR EXCEL
+                  </button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept=".xlsx, .xls"
+                    style={{ display: "none" }}
+                  />
+                  <button
+                    onClick={() => setShowForm(true)}
+                    className="w-full md:w-auto bg-blue-600 text-white px-4 md:px-6 py-2 md:py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 whitespace-nowrap"
+                  >
+                    <Plus size={20} /> NOVO PLANO DE ATIVIDADE
+                  </button>
+                </>
+              )}
             </div>
           )}
       </div>
@@ -707,140 +813,218 @@ export default function MatrixView({
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-blue-900 text-white text-[10px] tracking-wider">
-                    <th className="p-4 font-black border-r border-blue-800">
+                  <tr className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight text-center align-middle">
+                    <th className="p-2 border-r border-slate-300">
                       Nº
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Referência
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Direção
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Actividade/Tarefa
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Responsável
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Recursos Necessários
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Prazo
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Status
                     </th>
-                    <th className="p-4 font-black text-center">Ações</th>
                   </tr>
                 </thead>
-                <tbody className="text-xs">
-                  {activities.map((activity) => (
-                    <tr
-                      key={activity.id}
-                      className="border-b hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="p-4 border-r text-center font-bold text-blue-600">
-                        {(() => {
-                          const code =
-                            activity.referencia ||
-                            activity.codigoActividade ||
-                            "";
-                          const match = code.match(/(\d+)$/);
-                          if (match) {
-                            return parseInt(match[1], 10);
-                          }
-                          if (activity.no) {
-                            const parsedNo = parseInt(activity.no, 10);
-                            if (!isNaN(parsedNo)) return parsedNo;
-                            return activity.no;
-                          }
-                          return "-";
-                        })()}
-                      </td>
-                      <td className="p-4 border-r font-mono text-xs text-gray-500">
-                        {activity.referencia || "-"}
-                      </td>
-                      <td
-                        className="p-4 border-r font-bold text-blue-900"
-                        title={activity.direcao || ""}
+                <tbody className="text-[10px]">
+                  {activities.map((activity) => {
+                    const isSelected = (selectedActivityIds || []).includes(activity.id);
+                    return (
+                      <tr
+                        key={activity.id}
+                        className={`border-b border-slate-200 transition-all cursor-pointer ${isSelected ? "bg-blue-100/80 ring-1 ring-inset ring-blue-200" : "hover:bg-[#dbe5f1]"}`}
+                        onClick={() => onToggleSelect?.(activity.id)}
                       >
-                        {getDirectionAbbreviation(activity.direcao || "")}
-                      </td>
-                      <td className="p-4 border-r font-bold text-gray-900">
-                        {activity.title}
-                      </td>
-                      <td className="p-4 border-r text-gray-600">
-                        {activity.responsavel || "-"}
-                      </td>
-                      <td className="p-4 border-r text-gray-500">
-                        {activity.rubricas && activity.rubricas.length > 0 ? (
-                          <div className="space-y-1.5 min-w-[200px]">
-                            {activity.rubricas.map((r, i) => (
-                              <div
-                                key={i}
-                                className="pb-1 last:pb-0 border-b last:border-0 border-gray-100 text-[11px] leading-normal"
-                              >
-                                <span className="font-bold text-gray-700 block">
-                                  {r.rubrica}
-                                </span>
-                                <span className="text-gray-500 block italic">
-                                  • {r.necessidade}
-                                </span>
-                                <span className="text-blue-600 font-semibold block text-right mt-0.5">
-                                  {(r.valorTotal || 0).toLocaleString("pt-MZ", {
+                        <td className={`p-2 border-r border-slate-300 text-center font-bold ${isSelected ? "bg-blue-600 text-white" : "text-blue-600 bg-[#c6d9f1]"}`}>
+                          {(() => {
+                            const code =
+                              activity.referencia ||
+                              activity.codigoActividade ||
+                              "";
+                            const match = code.match(/(\d+)$/);
+                            if (match) {
+                              return parseInt(match[1], 10);
+                            }
+                            if (activity.no) {
+                              const parsedNo = parseInt(activity.no, 10);
+                              if (!isNaN(parsedNo)) return parsedNo;
+                              return activity.no;
+                            }
+                            return "-";
+                          })()}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 font-mono text-gray-500">
+                          {activity.referencia || "-"}
+                        </td>
+                        <td
+                          className="p-2 border-r border-slate-300 font-bold text-blue-900"
+                          title={activity.direcao || ""}
+                        >
+                          {getDirectionAbbreviation(activity.direcao || "")}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 font-bold text-gray-900">
+                          {activity.title}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 text-gray-600">
+                          {activity.responsavel || "-"}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 text-gray-500">
+                          {activity.rubricas && activity.rubricas.length > 0 ? (
+                            <div className="space-y-1 min-w-[200px]">
+                              {activity.rubricas.map((r, i) => (
+                                <div
+                                  key={i}
+                                  className="pb-1 last:pb-0 border-b last:border-0 border-slate-100 text-[9px] leading-normal"
+                                >
+                                  <span className="font-bold text-gray-700 block">
+                                    {r.rubrica}
+                                  </span>
+                                  <span className="text-gray-500 block italic">
+                                    • {r.necessidade}
+                                  </span>
+                                  <span className="text-blue-600 font-semibold block text-right mt-0.5">
+                                    {(r.valorTotal || 0).toLocaleString("pt-MZ", {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    }) + " MZN"}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <>
+                              {activity.necessidade || activity.rubrica || "-"}
+                              {activity.valor > 0 && (
+                                <span className="block text-blue-600 font-bold mt-1">
+                                  {activity.valor.toLocaleString("pt-MZ", {
                                     minimumFractionDigits: 2,
                                     maximumFractionDigits: 2,
                                   }) + " MZN"}
                                 </span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <>
-                            {activity.necessidade || activity.rubrica || "-"}
-                            {activity.valor > 0 && (
-                              <span className="block text-blue-600 font-bold mt-1">
-                                {activity.valor.toLocaleString("pt-MZ", {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                }) + " MZN"}
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </td>
-                      <td className="p-4 border-r text-gray-600">
-                        {activity.prazo || activity.dataMes || "-"}
-                      </td>
-                      <td className="p-4 border-r">
-                        <span className="flex items-center gap-1.5 text-amber-600 font-bold text-[10px]">
-                          <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></div>
-                          {activity.status === "draft"
-                            ? "Aguardando Plano Setorial"
-                            : "Submetido"}
-                        </span>
-                      </td>
-                      <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => setEditingActivity(activity)}
-                            className="p-2 text-blue-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
-                            title="Editar"
-                          >
-                            <Edit size={16} />
-                          </button>
-                          <button
-                            onClick={() => removeActivity(activity.id)}
-                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                            title="Remover"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                              )}
+                            </>
+                          )}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 text-gray-600">
+                          {activity.prazo || activity.dataMes || "-"}
+                        </td>
+                        <td className="p-2 border-r border-slate-300">
+                          <span className="flex items-center gap-1 text-amber-600 font-bold text-[9px]">
+                            <div className="w-1 h-1 bg-amber-500 rounded-full"></div>
+                            {activity.status === "draft"
+                              ? "Aguardando Plano"
+                              : "Submetido"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : viewMode === 'summary' ? (
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight align-middle">
+                    <th className="p-2 border-r border-slate-300">Necessidade</th>
+                    <th className="p-2 border-r border-slate-300 text-right">Valor Total (MZN)</th>
+                    <th className="p-2 text-center">Detalhes</th>
+                  </tr>
+                </thead>
+                <tbody className="text-[10px]">
+                  {(Object.entries(groupedNecessidades) as [string, any][]).map(([name, group]) => (
+                    <React.Fragment key={name}>
+                      <tr className="cursor-pointer hover:bg-slate-50 border-b border-slate-200" onClick={() => toggleGroup(name)}>
+                        <td className="p-2 border-r border-slate-300 font-bold text-gray-800">{group.originalName}</td>
+                        <td className="p-2 border-r border-slate-300 text-right font-black text-blue-900">{group.total.toLocaleString("pt-MZ", { minimumFractionDigits: 2 })}</td>
+                        <td className="p-2 text-center">{expandedGroups[name] ? <X size={14} className="mx-auto" /> : <Plus size={14} className="mx-auto" />}</td>
+                      </tr>
+                      {expandedGroups[name] && (
+                        <tr>
+                          <td colSpan={3} className="p-4 bg-slate-50">
+                            <ul className="space-y-2">
+                              {group.activities.map((act, i) => (
+                                <li key={i} className="flex justify-between items-center text-[10px] border-b border-slate-200 pb-1">
+                                  <span>{act.title} - {act.direcao}</span>
+                                  <span className="font-bold">{(act.itemRubrica?.valorTotal || 0).toLocaleString("pt-MZ", { minimumFractionDigits: 2 })} MZN</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : viewMode === 'rubrica' ? (
+            <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight align-middle">
+                    <th className="p-2 border-r border-slate-300">Rúbrica</th>
+                    <th className="p-2 border-r border-slate-300 text-right">Valor Total (MZN)</th>
+                    <th className="p-2 text-center">Detalhes</th>
+                  </tr>
+                </thead>
+                <tbody className="text-[10px]">
+                  {(Object.entries(groupedByRubrica) as [string, any][]).map(([rubricName, rubricGroup]) => (
+                    <React.Fragment key={rubricName}>
+                      <tr className="cursor-pointer hover:bg-slate-50 border-b border-slate-200" onClick={() => toggleGroup(rubricName)}>
+                        <td className="p-2 border-r border-slate-300 font-bold text-gray-800">{rubricName}</td>
+                        <td className="p-2 border-r border-slate-300 text-right font-black text-blue-900">{rubricGroup.total.toLocaleString("pt-MZ", { minimumFractionDigits: 2 })}</td>
+                        <td className="p-2 text-center">{expandedGroups[rubricName] ? <X size={14} className="mx-auto" /> : <Plus size={14} className="mx-auto" />}</td>
+                      </tr>
+                      {expandedGroups[rubricName] && (
+                        <tr>
+                          <td colSpan={3} className="p-0 bg-slate-50">
+                            <table className="w-full text-[10px]">
+                              <tbody>
+                                {(Object.entries(rubricGroup.needs) as [string, any][]).map(([needName, needData]) => (
+                                  <React.Fragment key={needName}>
+                                    <tr className="cursor-pointer hover:bg-slate-100 border-b border-slate-200 bg-white" onClick={() => toggleNeed(rubricName, needName)}>
+                                      <td className="p-2 pl-6 border-r border-slate-300 font-medium text-gray-700">{needName}</td>
+                                      <td className="p-2 border-r border-slate-300 text-right font-bold text-gray-800">{needData.total.toLocaleString("pt-MZ", { minimumFractionDigits: 2 })}</td>
+                                      <td className="p-2 text-center">{expandedNeeds[`${rubricName}-${needName}`] ? <X size={12} className="mx-auto" /> : <Plus size={12} className="mx-auto" />}</td>
+                                    </tr>
+                                    {expandedNeeds[`${rubricName}-${needName}`] && (
+                                      <tr>
+                                        <td colSpan={3} className="p-4 bg-slate-50">
+                                          <ul className="space-y-1">
+                                            {needData.activities.map((act, i) => (
+                                              <li key={i} className="flex justify-between border-b border-slate-200 pb-1">
+                                                <span>{act.title} - {act.direcao}</span>
+                                                <span className="font-bold">{(act.itemRubrica?.valorTotal || 0).toLocaleString("pt-MZ", { minimumFractionDigits: 2 })} MZN</span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </React.Fragment>
+                                ))}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
@@ -851,233 +1035,201 @@ export default function MatrixView({
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-blue-900 text-white text-[10px] tracking-wider">
-                    <th className="p-4 font-black border-r border-blue-800">
+                  <tr className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight text-center align-middle">
+                    <th className="p-2 border-r border-slate-300">
                       Direção
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Referência
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Status
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Departamento
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Repartição
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Orçamento
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
-                      Nível de Prioridade
+                    <th className="p-2 border-r border-slate-300">
+                      Prioridade
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
-                      Nome da Actividade
+                    <th className="p-2 border-r border-slate-300">
+                      Actividade
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
-                      Local de Realização
+                    <th className="p-2 border-r border-slate-300">
+                      Local
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Mês
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Data
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Rubrica
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Necessidade
                     </th>
-                    <th className="p-4 font-black border-r border-blue-800">
+                    <th className="p-2 border-r border-slate-300">
                       Valor
                     </th>
-                    <th className="p-4 font-black text-center">Ações</th>
                   </tr>
                 </thead>
-                <tbody className="text-xs">
-                  {getStatusFromDates(activities).map((activity) => (
-                    <tr
-                      key={activity.id}
-                      className="border-b hover:bg-gray-50 transition-colors"
-                    >
-                      <td
-                        className="p-4 border-r font-medium text-gray-700"
-                        title={
-                          activity.direcao || activity.unidadeOrganica || ""
-                        }
+                <tbody className="text-[10px]">
+                  {getStatusFromDates(activities).map((activity) => {
+                    const isSelected = selectedActivityIds.includes(activity.id);
+                    return (
+                      <tr
+                        key={activity.id}
+                        className={`border-b border-slate-200 transition-all cursor-pointer ${isSelected ? "bg-blue-100/80 ring-1 ring-inset ring-blue-200" : "hover:bg-[#dbe5f1]"}`}
+                        onClick={() => onToggleSelect(activity.id)}
                       >
-                        {getDirectionAbbreviation(
-                          activity.direcao || activity.unidadeOrganica || "",
-                        )}
-                      </td>
-                      <td className="p-4 border-r font-mono text-xs text-gray-500">
-                        {activity.referencia || "-"}
-                      </td>
-                      <td className="p-4 border-r text-gray-600">
-                        <span
-                          className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                            activity.status === "pronta"
-                              ? "bg-yellow-100 text-yellow-700"
+                        <td
+                          className="p-2 border-r border-slate-300 font-medium text-gray-700"
+                          title={
+                            activity.direcao || activity.unidadeOrganica || ""
+                          }
+                        >
+                          {getDirectionAbbreviation(
+                            activity.direcao || activity.unidadeOrganica || "",
+                          )}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 font-mono text-gray-500 text-center">
+                          {activity.referencia || "-"}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 text-gray-600 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                              activity.status === "pronta"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : activity.status === "em_execucao"
+                                  ? "bg-green-100 text-green-700"
+                                  : activity.status === "executada"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : "bg-gray-100 text-gray-700"
+                            }`}
+                          >
+                            {activity.status === "pronta"
+                              ? "Pronta"
                               : activity.status === "em_execucao"
-                                ? "bg-green-100 text-green-700"
+                                ? "Em Execução"
                                 : activity.status === "executada"
-                                  ? "bg-blue-100 text-blue-700"
-                                  : "bg-gray-100 text-gray-700"
-                          }`}
-                        >
-                          {activity.status === "pronta"
-                            ? "Pronta"
-                            : activity.status === "em_execucao"
-                              ? "Em Execução"
-                              : activity.status === "executada"
-                                ? "Executada"
-                                : activity.status}
-                        </span>
-                      </td>
-                      <td className="p-4 border-r text-gray-600">
-                        {activity.departamento}
-                      </td>
-                      <td className="p-4 border-r text-gray-600">
-                        {activity.reparticao || "-"}
-                      </td>
-                      <td className="p-4 border-r text-gray-600">
-                        <select
-                          value={activity.orcamento || ""}
-                          onChange={(e) =>
-                            updateActivity(
-                              activity.id,
-                              "orcamento",
-                              e.target.value,
-                            )
-                          }
-                          className="w-full bg-transparent border-0 outline-none focus:ring-2 focus:ring-blue-500 rounded p-1 text-xs text-blue-900 font-bold"
-                        >
-                          <option value="">Selecione...</option>
-                          {FONTES_RECEITA.map((f) => (
-                            <option key={f} value={f}>
-                              {f}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="p-4 border-r">
-                        <select
-                          value={activity.nivel || "Média"}
-                          onChange={(e) =>
-                            updateActivity(activity.id, "nivel", e.target.value)
-                          }
-                          className={`w-full bg-transparent border-0 outline-none focus:ring-2 focus:ring-blue-500 rounded p-1 text-xs font-bold ${
-                            activity.nivel === "Urgente"
-                              ? "text-red-700"
-                              : activity.nivel === "Alta"
-                                ? "text-orange-700"
-                                : activity.nivel === "Média"
-                                  ? "text-blue-700"
-                                  : "text-gray-700"
-                          }`}
-                        >
-                          {PRIORIDADES.map((p) => (
-                            <option key={p} value={p}>
-                              {p}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="p-4 border-r font-bold text-gray-900">
-                        {activity.title}
-                      </td>
-                      <td className="p-4 border-r text-gray-600">
-                        {activity.localRealizacao || "-"}
-                      </td>
-                      <td className="p-4 border-r text-gray-600">
-                        {activity.dataMes}
-                      </td>
-                      <td className="p-4 border-r text-gray-600">
-                        {activity.data || activity.prazo || "-"}
-                      </td>
-                      <td className="p-4 border-r text-gray-600">
-                        {activity.rubricas && activity.rubricas.length > 0 ? (
-                          <div className="space-y-2">
-                            {activity.rubricas.map((r, i) => (
-                              <div
-                                key={i}
-                                className="pb-1 last:pb-0 border-b last:border-0 border-gray-100 font-bold"
-                              >
-                                {r.rubrica || "-"}
-                              </div>
+                                  ? "Executada"
+                                  : activity.status}
+                          </span>
+                        </td>
+                        <td className="p-2 border-r border-slate-300 text-gray-600">
+                          {activity.departamento}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 text-gray-600">
+                          {activity.reparticao || "-"}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 text-gray-600">
+                          <select
+                            value={activity.orcamento || ""}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              if (onUpdateActivity) {
+                                onUpdateActivity(activity.id, { orcamento: e.target.value });
+                              }
+                            }}
+                            className="w-full bg-transparent border-0 outline-none focus:ring-1 focus:ring-blue-500 rounded p-0.5 text-[10px] text-blue-900 font-bold"
+                          >
+                            <option value="">Selecione...</option>
+                            {FONTES_RECEITA.map((f) => (
+                              <option key={f} value={f}>
+                                {f}
+                              </option>
                             ))}
-                          </div>
-                        ) : (
-                          activity.rubrica || "-"
-                        )}
-                      </td>
-                      <td className="p-4 border-r text-gray-500 italic">
-                        {activity.rubricas && activity.rubricas.length > 0 ? (
-                          <div className="space-y-2">
-                            {activity.rubricas.map((r, i) => (
-                              <div
-                                key={i}
-                                className="pb-1 last:pb-0 border-b last:border-0 border-gray-100 italic"
-                              >
-                                {r.necessidade || "-"}
-                              </div>
+                          </select>
+                        </td>
+                        <td className="p-2 border-r border-slate-300">
+                          <select
+                            value={activity.nivel || "Média"}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              if (onUpdateActivity) {
+                                onUpdateActivity(activity.id, { nivel: e.target.value });
+                              }
+                            }}
+                            className={`w-full bg-transparent border-0 outline-none focus:ring-1 focus:ring-blue-500 rounded p-0.5 text-[10px] font-bold ${
+                              activity.nivel === "Urgente"
+                                ? "text-red-700"
+                                : activity.nivel === "Alta"
+                                  ? "text-orange-700"
+                                  : activity.nivel === "Média"
+                                    ? "text-blue-700"
+                                    : "text-gray-700"
+                            }`}
+                          >
+                            {PRIORIDADES.map((p) => (
+                              <option key={p} value={p}>
+                                {p}
+                              </option>
                             ))}
-                          </div>
-                        ) : (
-                          activity.necessidade || "-"
-                        )}
-                      </td>
-                      <td className="p-4 border-r font-black text-blue-900">
-                        {activity.rubricas && activity.rubricas.length > 0 ? (
-                          <div className="space-y-2 text-right">
-                            {activity.rubricas.map((r, i) => (
-                              <div
-                                key={i}
-                                className="pb-1 last:pb-0 border-b last:border-0 border-gray-100"
-                              >
-                                {(r.valorTotal || 0).toLocaleString("pt-MZ", {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                }) + " MZN"}
-                              </div>
-                            ))}
-                            <div className="border-t border-blue-200 pt-1 font-black text-emerald-600 text-[11px] mt-1">
-                              {activity.valor.toLocaleString("pt-MZ", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              }) + " MZN"}
+                          </select>
+                        </td>
+                        <td className="p-2 border-r border-slate-300 font-bold text-gray-900">
+                          {activity.title}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 text-gray-600">
+                          {activity.localRealizacao || "-"}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 text-gray-600 text-center">
+                          {activity.dataMes}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 text-gray-600 text-center">
+                          {activity.data || activity.prazo || "-"}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 text-gray-600 italic">
+                          {activity.rubricas && activity.rubricas.length > 0 ? (
+                            <div className="space-y-1">
+                              {activity.rubricas.map((r, i) => (
+                                <div
+                                  key={i}
+                                  className="pb-0.5 last:pb-0 border-b last:border-0 border-slate-100 font-bold"
+                                >
+                                  {r.rubrica || "-"}
+                                </div>
+                              ))}
                             </div>
-                          </div>
-                        ) : (
-                          activity.valor.toLocaleString("pt-MZ", {
+                          ) : (
+                            activity.rubrica || "-"
+                          )}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 text-gray-600">
+                          {activity.rubricas && activity.rubricas.length > 0 ? (
+                            <div className="space-y-1">
+                              {activity.rubricas.map((r, i) => (
+                                <div
+                                  key={i}
+                                  className="pb-0.5 last:pb-0 border-b last:border-0 border-slate-100"
+                                >
+                                  {r.necessidade || "-"}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            activity.necessidade || "-"
+                          )}
+                        </td>
+                        <td className="p-2 border-r border-slate-300 font-black text-right text-blue-900 bg-slate-50">
+                          {(activity.rubricas && activity.rubricas.length > 0
+                            ? activity.rubricas.reduce((sum, r) => sum + (r.valorTotal || 0), 0)
+                            : (activity.valor || 0)
+                          ).toLocaleString("pt-MZ", {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
-                          }) + " MZN"
-                        )}
-                      </td>
-                      <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => setEditingActivity(activity)}
-                            className="p-2 text-blue-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
-                            title="Editar"
-                          >
-                            <Edit size={16} />
-                          </button>
-                          <button
-                            onClick={() => removeActivity(activity.id)}
-                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                            title="Remover"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          })}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1262,6 +1414,87 @@ export default function MatrixView({
             >
               SUBMETER O PLANO DE ATIVIDADE
             </button>
+          </div>
+        </div>
+      )}
+      <AnimatePresence>
+        {selectedActivityIds.length > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-slate-900/95 backdrop-blur-md text-white px-8 py-4 rounded-[2.5rem] shadow-2xl border border-slate-700/50 flex items-center gap-8 min-w-[500px] print:hidden"
+          >
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">
+                Seleção Ativa
+              </span>
+              <span className="text-sm font-black whitespace-nowrap">
+                {selectedActivityIds.length} {selectedActivityIds.length === 1 ? 'Atividade Selecionada' : 'Atividades Selecionadas'}
+              </span>
+            </div>
+            
+            <div className="h-8 w-px bg-slate-700" />
+            
+            <div className="flex items-center gap-3">
+              {selectedActivityIds.length === 1 && (
+                <button
+                  onClick={() => {
+                    const act = activities.find(a => a.id === selectedActivityIds[0]);
+                    if (act) {
+                      setEditingActivity(act);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-xs transition-all shadow-lg shadow-blue-900/20 cursor-pointer"
+                >
+                  <Edit size={14} /> EDITAR
+                </button>
+              )}
+              
+              <button
+                onClick={handleBatchDelete}
+                className="flex items-center gap-2 px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs transition-all shadow-lg shadow-rose-900/20 cursor-pointer"
+              >
+                <Trash2 size={14} /> EXCLUIR
+              </button>
+
+              <button
+                onClick={() => setSelectedActivityIds([])}
+                className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl font-black text-xs transition-all cursor-pointer"
+              >
+                <X size={14} /> CANCELAR
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {showBatchDeleteConfirm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-100 flex flex-col animate-scale-up">
+            <div className="p-6 border-b border-slate-100 bg-slate-50">
+              <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                Confirmar Exclusão
+              </h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-500 font-medium">
+                (Tem a certeza que pretende excluir a atividade? Se sim, prossiga, se não aborta)
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowBatchDeleteConfirm(false)}
+                  className="flex-1 px-4 py-2 bg-white text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-xl border border-slate-200 hover:bg-slate-100 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => { setShowBatchDeleteConfirm(false); confirmBatchDelete(); }}
+                  className="flex-1 px-4 py-2 bg-rose-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-rose-700 transition-all"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -163,7 +163,13 @@ export default function NotificationCenter({ user }: { user: any }) {
     }),
     ...resetRequests.filter((req) => {
       // Only admins see reset requests
-      return req.status === "Pendente" && (user.isOwner || user.role === "Administrador do Sistema");
+      return (
+        req.status === "Pendente" &&
+        (user.isOwner ||
+          user.role === "Administrador do Sistema" ||
+          user.role === "Administrador" ||
+          isSuperBossUser(user))
+      );
     }),
   ];
 

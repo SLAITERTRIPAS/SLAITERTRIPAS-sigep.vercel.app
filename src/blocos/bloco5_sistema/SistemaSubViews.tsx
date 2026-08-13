@@ -24,9 +24,10 @@ import {
   Activity,
   Printer,
 } from "lucide-react";
-import { collection, getDocs, onSnapshot } from "firebase/firestore";
+import { collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { firestoreService } from "../../lib/firestoreService";
+import { db } from "../../lib/firebase";
 import { isSuperBossUser } from "../../lib/auth";
 import { ProcessingCircle } from "../../components/ui/ProcessingCircle";
 import { openPrintDocumentWindow } from "../../lib/printUtils";
@@ -583,13 +584,13 @@ export function DatabaseView({
 
       <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
         <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50/50 text-gray-400 text-[10px] font-bold tracking-wider border-b border-gray-200">
+          <thead className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight text-center align-middle">
             <tr>
-              <th className="px-6 py-4">Nome Da Tabela</th>
-              <th className="px-6 py-4">Registos</th>
-              <th className="px-6 py-4">Última Alteração</th>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4 text-right">Ações</th>
+              <th className="px-6 py-3 border-r border-slate-300">Nome Da Tabela</th>
+              <th className="px-6 py-3 border-r border-slate-300">Registos</th>
+              <th className="px-6 py-3 border-r border-slate-300">Última Alteração</th>
+              <th className="px-6 py-3 border-r border-slate-300">Status</th>
+              <th className="px-6 py-3 text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -696,14 +697,23 @@ export function UserManagementView({
         newPassword
       );
       if (res && res.success) {
-        alert(`Senha de ${userName} resetada com sucesso para '${newPassword}'.`);
+        alert("Senha redefinida com sucesso.");
         setNewPassword("1234"); // Reset input to default for next time
+        // Remove also from password_reset_requests
+        const resetReqQuery = query(collection(db, "password_reset_requests"), where("status", "==", "Pendente"));
+        const reqSnap = await getDocs(resetReqQuery);
+        reqSnap.forEach(async (doc) => {
+          const data = doc.data();
+          if (data.identifier === name || data.identifier === id) {
+            await firestoreService.password_reset_requests.delete(doc.id);
+          }
+        });
       } else {
-        alert("Erro ao resetar senha: " + (res?.error || "Erro desconhecido"));
+        alert("Erro de redefinição de senha");
       }
     } catch (err: any) {
       console.error("Erro ao resetar senha:", err);
-      alert("Erro ao resetar senha: " + (err?.message || String(err)));
+      alert("Erro de redefinição de senha");
     } finally {
       setIsResetting(null);
     }
@@ -821,13 +831,13 @@ export function UserManagementView({
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-left">
-          <thead className="bg-gray-50 text-[10px] font-black text-gray-400 tracking-widest border-b border-gray-100">
+          <thead className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight text-center align-middle">
             <tr>
-              <th className="px-8 py-4">Utilizador</th>
-              <th className="px-8 py-4">Cargo / Unidade</th>
-              <th className="px-8 py-4">Tempo de Sessão</th>
-              <th className="px-8 py-4">Status</th>
-              <th className="px-8 py-4 text-right">Ações</th>
+              <th className="px-8 py-3 border-r border-slate-300">Utilizador</th>
+              <th className="px-8 py-3 border-r border-slate-300">Cargo / Unidade</th>
+              <th className="px-8 py-3 border-r border-slate-300">Tempo de Sessão</th>
+              <th className="px-8 py-3 border-r border-slate-300">Status</th>
+              <th className="px-8 py-3 text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">

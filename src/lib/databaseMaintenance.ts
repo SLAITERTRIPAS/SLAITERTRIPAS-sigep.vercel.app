@@ -76,6 +76,9 @@ export const databaseMaintenance = {
         const titleKey = `${dept}|${title}|${year}`;
         const codeKey = `${dept}|${code}|${year}`;
 
+        // Ignorar o departamento de património no agrupamento de exclusões (devem ser diferenciados, não eliminados)
+        if (dept.includes("patrimonio")) return;
+
         // Unir por mesmo título no mesmo departamento/ano
         if (title !== "") {
           if (titleDeptMap.has(titleKey)) {

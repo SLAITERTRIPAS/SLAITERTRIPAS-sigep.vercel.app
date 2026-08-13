@@ -755,32 +755,32 @@ export default function MonitoriaView({
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-max">
                     <thead>
-                      <tr className="bg-slate-900 text-[9px] tracking-widest text-white font-black uppercase">
-                        <th className="px-4 py-4 border border-slate-800 text-center w-12">
+                      <tr className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight text-center align-middle">
+                        <th className="p-2 border-r border-slate-300 w-12">
                           N/O
                         </th>
-                        <th className="px-4 py-4 border border-slate-800">
+                        <th className="p-2 border-r border-slate-300">
                           Cód. Actividade
                         </th>
-                        <th className="px-4 py-4 border border-slate-800">
+                        <th className="p-2 border-r border-slate-300">
                           Nome da Actividade
                         </th>
-                        <th className="px-4 py-4 border border-slate-800">
+                        <th className="p-2 border-r border-slate-300">
                           Mês Realização
                         </th>
-                        <th className="px-4 py-4 border border-slate-800">
+                        <th className="p-2 border-r border-slate-300">
                           Data
                         </th>
-                        <th className="px-4 py-4 border border-slate-800">
+                        <th className="p-2 border-r border-slate-300">
                           Responsável
                         </th>
-                        <th className="px-4 py-4 border border-slate-800">
+                        <th className="p-2 border-r border-slate-300">
                           Justificação Estado
                         </th>
-                        <th className="px-4 py-4 border border-slate-800 text-center w-28">
+                        <th className="p-2 border-r border-slate-300 text-center w-28">
                           Status (%)
                         </th>
-                        <th className="px-4 py-4 border border-slate-800 text-center">
+                        <th className="p-2 text-center">
                           Estado
                         </th>
                       </tr>
@@ -953,14 +953,14 @@ export default function MonitoriaView({
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-max">
                     <thead>
-                      <tr className="bg-gray-50 text-xs tracking-widest text-gray-400 font-black">
-                        <th className="px-6 py-6 border-b border-gray-100">
+                      <tr className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight text-center align-middle">
+                        <th className="p-2 border-r border-slate-300">
                           Actividade
                         </th>
-                        <th className="px-6 py-6 border-b border-gray-100">
+                        <th className="p-2 border-r border-slate-300">
                           Mês
                         </th>
-                        <th className="px-6 py-6 border-b border-gray-100 text-right">
+                        <th className="p-2 text-right">
                           Orçamento
                         </th>
                       </tr>
@@ -1023,13 +1023,13 @@ export default function MonitoriaView({
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-max">
                     <thead>
-                      <tr className="bg-gray-50 text-xs tracking-widest text-gray-400 font-black">
-                        <th className="px-6 py-5 border-b border-gray-100">N/o</th>
-                        <th className="px-6 py-5 border-b border-gray-100">Código da Atividade</th>
-                        <th className="px-6 py-5 border-b border-gray-100">Mês de Realização</th>
-                        <th className="px-6 py-5 border-b border-gray-100">Departamento</th>
-                        <th className="px-6 py-5 border-b border-gray-100">Responsável</th>
-                        <th className="px-6 py-5 border-b border-gray-100 text-right">Valor Total</th>
+                      <tr className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight text-center align-middle">
+                        <th className="p-2 border-r border-slate-300">N/o</th>
+                        <th className="p-2 border-r border-slate-300">Código da Atividade</th>
+                        <th className="p-2 border-r border-slate-300">Mês de Realização</th>
+                        <th className="p-2 border-r border-slate-300">Departamento</th>
+                        <th className="p-2 border-r border-slate-300">Responsável</th>
+                        <th className="p-2 text-right">Valor Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 text-gray-800 font-medium">

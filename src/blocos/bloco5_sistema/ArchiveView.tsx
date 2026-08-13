@@ -83,11 +83,11 @@ const ExcelPreview = ({ dataUrl }: { dataUrl: string }) => {
     <div className="overflow-auto border border-slate-200 rounded-xl shadow-sm bg-white max-h-[600px]">
       <table className="w-full text-xs text-left border-collapse">
         <thead className="sticky top-0 z-10">
-          <tr className="bg-slate-900 text-white font-black uppercase tracking-widest">
+          <tr className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight text-center align-middle sticky top-0 z-10">
             {data[0]?.map((cell, j) => (
               <th
                 key={j}
-                className="p-3 border-r border-slate-700 min-w-[150px]"
+                className="p-3 border-r border-slate-300 min-w-[150px]"
               >
                 {String(cell || `Coluna ${j + 1}`)}
               </th>
@@ -587,9 +587,9 @@ export default function ArchiveView({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#f8fafc] border-b border-slate-100 text-[11px] font-extrabold uppercase tracking-widest text-[#64748b]">
-                <th className="p-4 pl-6 text-left">Título do Documento</th>
-                <th className="p-4 text-center">Data de Submissão</th>
+              <tr className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight text-center align-middle">
+                <th className="p-4 pl-6 text-left border-r border-slate-300">Título do Documento</th>
+                <th className="p-4 text-center border-r border-slate-300">Data de Submissão</th>
                 <th className="p-4 text-right pr-6">Ações</th>
               </tr>
             </thead>

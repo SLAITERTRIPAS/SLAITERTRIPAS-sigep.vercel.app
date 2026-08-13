@@ -2,34 +2,12 @@ import React from "react";
 
 export const ActivityTableHeader = React.memo(function ActivityTableHeader({
   isDPEP,
-  onToggleSelectAll,
-  isAllSelected,
 }: {
   isDPEP: boolean;
-  onToggleSelectAll?: () => void;
-  isAllSelected?: boolean;
 }) {
   return (
     <thead className="bg-[#0e7490] text-white text-[10px] uppercase font-black tracking-tight text-center align-middle">
       <tr className="border-t-2 border-slate-950">
-        <th
-          className="p-1 border-2 border-slate-950 whitespace-nowrap w-8 text-center"
-          rowSpan={2}
-        >
-          <input
-            type="checkbox"
-            checked={Boolean(isAllSelected)}
-            onChange={onToggleSelectAll || (() => {})}
-            readOnly={!onToggleSelectAll}
-            disabled={!onToggleSelectAll}
-            className="cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-            title={
-              onToggleSelectAll
-                ? "Selecionar / Desselecionar Todas"
-                : "Seleção indisponível"
-            }
-          />
-        </th>
         <th
           className="p-1 border-2 border-slate-950 whitespace-nowrap w-10 text-center text-[10px]"
           rowSpan={2}

@@ -199,7 +199,7 @@ export default function ChangePasswordModal({
           }
         }
 
-        setSuccess("Senha alterada com sucesso!");
+        setSuccess("Senha redefinida com sucesso.");
         setTimeout(() => {
           onClose();
           // Force reload to ensure all states are consistent with new password
@@ -208,7 +208,7 @@ export default function ChangePasswordModal({
       }
     } catch (err: any) {
       console.error(err);
-      setError("Erro ao redefinir senha.");
+      setError("Erro de redefinição de senha");
     } finally {
       setLoading(false);
     }

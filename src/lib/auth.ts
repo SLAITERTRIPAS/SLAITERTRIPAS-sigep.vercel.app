@@ -40,6 +40,48 @@ export const isDPEPUser = (user: any): boolean => {
   );
 };
 
+export const isDepartmentMatch = (deptA?: string, deptB?: string): boolean => {
+  if (!deptA || !deptB) return false;
+
+  const escapeReg = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const norm = (s: string) =>
+    String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/^(departamento|diretor do|diretor da|diretor de|direccao|direcao|divisao|reparticao|setor|sector|chefe do|chefe de|chefe da|depto|dep|centro de|gabinete do|gabinete de)\s+/gi, "")
+      .replace(/\b(de|da|do|dos|das)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const a = norm(deptA);
+  const b = norm(deptB);
+
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  const regA = new RegExp(`(?:^|\\b|_|\\s)${escapeReg(a)}(?:$|\\b|_|\\s)`, "i");
+  const regB = new RegExp(`(?:^|\\b|_|\\s)${escapeReg(b)}(?:$|\\b|_|\\s)`, "i");
+
+  return regA.test(b) || regB.test(a);
+};
+
+export const isUnitBelongsToDirection = (unitName?: string, directionName?: string): boolean => {
+  if (!unitName || !directionName) return false;
+  if (isDepartmentMatch(unitName, directionName)) return true;
+
+  const normTarget = directionName.trim();
+  for (const [dirKey, deptList] of Object.entries(DEPARTAMENTOS)) {
+    if (isDepartmentMatch(dirKey, normTarget)) {
+      if (deptList.some((d) => isDepartmentMatch(d, unitName))) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
 export const canAccessArea = (
   user: any,
   targetDir: string,
@@ -54,8 +96,8 @@ export const canAccessArea = (
   }
 
   const roles = getRoles(user.title || user.cargo || user.cargoChefia || user.role || "");
-  // DG (Diretor Geral) e DC (Diretor Central) também são superiores centralizados
-  if (roles.isDG || roles.isDC) {
+  // DG (Diretor Geral) tem acesso institucional total
+  if (roles.isDG) {
     return true;
   }
 
@@ -68,6 +110,7 @@ export const canAccessArea = (
       .replace(/\s+/g, " ")
       .trim();
 
+  const uDir = user.direcao || user.orgao || "";
   const uDept = norm(user.departamento || "");
   const uSector = norm(user.setor || user.reparticao || "");
   const isUserDCC = roles.isDCC;
@@ -86,24 +129,27 @@ export const canAccessArea = (
     return false;
   }
 
+  // Se o utilizador é de uma Direção (ex: CIE, DICOSAFA) e o alvo é de outra Direção
+  if (uDir && targetDir) {
+    if (!isUnitBelongsToDirection(targetDir, uDir) && !isDepartmentMatch(uDir, targetDir)) {
+      return false;
+    }
+  }
+
   // "cada departamento e unico, e independente"
   if (uDept && tDept) {
-    if (uDept !== tDept) {
+    if (!isDepartmentMatch(uDept, tDept)) {
       return false; // Departamentos diferentes nunca cruzam dados
     }
   }
 
   if (uSector && tSector) {
-    if (uSector !== tSector) {
+    if (!isDepartmentMatch(uSector, tSector)) {
       return false; // Setores diferentes dentro do departamento também não se cruzam
     }
   }
 
-  // Se passou em todas as regras de restrição estrita
-  if (uDept && tDept && uDept === tDept) return true;
-  if (uSector && tSector && uSector === tSector) return true;
-
-  return false;
+  return true;
 };
 
 /**
@@ -125,9 +171,9 @@ export const getAuthorizedActivities = (activities: any[], user: any) => {
     role === "proprietario" ||
     user.isOwner === true;
 
-  // Órgão Máximo de Planificação e Direção Central (Diretor Geral, Diretor Central, SuperBoss, Admin, DPEP)
-  // Eles prestam contas ao mesmo superior, logo esses superiores têm acesso soberano de supervisão.
-  if (isSysAdmin || roles.isDG || roles.isDC || isSuperBossUser(user) || isDPEPUser(user)) {
+  // Órgão Máximo de Planificação e Direção Geral (Diretor Geral, SuperBoss, Admin, DPEP)
+  // Eles possuem acesso soberano institucional. Diretores de Direção/Departamentos vêem estritamente o seu setor.
+  if (isSysAdmin || roles.isDG || isSuperBossUser(user) || isDPEPUser(user)) {
     return activities;
   }
 
@@ -138,14 +184,16 @@ export const getAuthorizedActivities = (activities: any[], user: any) => {
     String(s || "")
       .toLowerCase()
       .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
+      .replace(/[\u0300-\u036f]/g, "")
       .replace(/ (departamento|depto|dep|reparticao|rep|setor|direcao|direccao|curso|divisao|unidade|de|do|da|dos|das) /g, " ")
       .replace(/\s+/g, " ")
       .trim();
 
-  const uDeptNorm = norm(user.departamento || "");
+  const uDir = user.direcao || user.orgao || user.title || user.cargoChefia || "";
+  const uDept = user.departamento || "";
+  const uDeptNorm = norm(uDept);
   const uSetorNorm = norm(user.setor || user.reparticao || "");
-  const uCursoNorm = norm(user.curso || user.title || user.cargo || user.cargoChefia || "");
+  const uCursoNorm = norm(user.curso || "");
 
   const isUserDCC = roles.isDCC;
 
@@ -158,13 +206,42 @@ export const getAuthorizedActivities = (activities: any[], user: any) => {
       return true;
     }
 
-    const aDept = String(a.departamento || a.unidade || a.orgao || a.solicitante || a.origem || "").trim();
-    const aSector = String(a.setor || a.reparticao || "").trim();
-    const aCurso = String(a.curso || a.titulo || a.designacao || a.nome || "").trim();
+    const aDir = a.direcao || a.orgao || a.unidadeOrganica || "";
+    const aDept = a.departamento || a.unidade || a.solicitante || a.origem || "";
+    const aSector = a.setor || a.reparticao || "";
+    const aCurso = a.curso || a.titulo || a.designacao || a.nome || "";
 
     const aDeptNorm = norm(aDept);
     const aSectorNorm = norm(aSector);
     const aCursoNorm = norm(aCurso);
+
+    // Verificar se a atividade foi explicitamente partilhada com o departamento/setor do utilizador
+    const sharedDepts = [
+      a.departamentoDestinatario,
+      a.paraDepartamento,
+      a.destinatario,
+      a.orgaoDestinatario,
+      a.departamentoDestino,
+      ...(Array.isArray(a.destinatarios) ? a.destinatarios : []),
+      ...(Array.isArray(a.partilhadoCom) ? a.partilhadoCom : []),
+      ...(Array.isArray(a.departamentosDestinatarios) ? a.departamentosDestinatarios : []),
+      ...(Array.isArray(a.sharedWith) ? a.sharedWith : []),
+    ].map((d) => String(d || "")).filter(Boolean);
+
+    const sharedSectors = [
+      a.setorDestinatario,
+      a.reparticaoDestinataria,
+      a.paraSetor,
+      a.setorDestino,
+      ...(Array.isArray(a.setoresDestinatarios) ? a.setoresDestinatarios : []),
+    ].map((s) => String(s || "")).filter(Boolean);
+
+    if (
+      (uDept && sharedDepts.some((d) => isDepartmentMatch(d, uDept))) ||
+      (uSetorNorm && sharedSectors.some((s) => isDepartmentMatch(s, uSetorNorm)))
+    ) {
+      return true;
+    }
 
     const isDCCAct = 
       aDeptNorm.includes("dcc") || 
@@ -176,37 +253,42 @@ export const getAuthorizedActivities = (activities: any[], user: any) => {
 
     // "o plano do dcc, nunca deve ser visto por outros departamentos"
     if (isDCCAct) {
-      // Se a atividade for do DCC, apenas outro utilizador DCC do mesmo curso ou com o mesmo departamento/curso de origem pode ver
       if (!isUserDCC) {
         return false;
       }
-      
-      // Se o utilizador atual é DCC, verificar se coincide com o curso ou departamento específico
-      if (uCursoNorm && aCursoNorm && (uCursoNorm === aCursoNorm || aCursoNorm.includes(uCursoNorm) || uCursoNorm.includes(aCursoNorm))) {
+      if (uCursoNorm && aCursoNorm && isDepartmentMatch(uCursoNorm, aCursoNorm)) {
         return true;
       }
-      if (uDeptNorm && aDeptNorm && uDeptNorm === aDeptNorm) {
+      if (uDeptNorm && aDeptNorm && isDepartmentMatch(uDeptNorm, aDeptNorm)) {
         return true;
       }
       return false;
     }
 
-    // "cada departamento e unico, e independente, so presta conta ao mesmo superior"
-    // Nenhum outro departamento pode ver planos que não sejam estritamente do seu próprio departamento.
-    if (uDeptNorm && aDeptNorm) {
-      if (uDeptNorm === aDeptNorm) {
-        // Se houver divisão por setores/repartições internos dentro do departamento
+    // "cada departamento e unico, e independente"
+    if (uDept && aDept) {
+      if (isDepartmentMatch(uDept, aDept)) {
         if (uSetorNorm && aSectorNorm) {
-          return uSetorNorm === aSectorNorm;
+          return isDepartmentMatch(uSetorNorm, aSectorNorm);
         }
         return true;
       }
-      return false; // Se os departamentos forem diferentes, o acesso é negado
+      return false;
     }
 
     // Se o utilizador tiver apenas setor/repartição sem departamento
     if (uSetorNorm && aSectorNorm) {
-      return uSetorNorm === aSectorNorm;
+      return isDepartmentMatch(uSetorNorm, aSectorNorm);
+    }
+
+    // Se o utilizador pertence a uma Direção/Órgão e a atividade pertence a essa Direção ou a um departamento dessa Direção
+    if (uDir) {
+      if (aDir && isDepartmentMatch(aDir, uDir)) {
+        return true;
+      }
+      if (aDept && isUnitBelongsToDirection(aDept, uDir)) {
+        return true;
+      }
     }
 
     return false;

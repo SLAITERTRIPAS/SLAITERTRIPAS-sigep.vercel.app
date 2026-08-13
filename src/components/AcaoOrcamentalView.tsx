@@ -1149,22 +1149,27 @@ export default function AcaoOrcamentalView({
         label: string;
         totalQuant: number;
         totalValor: number;
-        itemsMap: Record<
+        necessidadesMap: Record<
           string,
           {
             label: string;
-            nomeProduto?: string;
-            quant: number;
-            valor: number;
-            precoUnitario?: number;
-            especificacao?: string;
-            count: number;
+            totalQuant: number;
+            totalValor: number;
+            bensMap: Record<
+              string,
+              {
+                nomeProduto: string;
+                quant: number;
+                valor: number;
+                precoUnitario: number;
+                especificacao?: string;
+              }
+            >
           }
         >;
       }
     > = {};
 
-    // Se o utilizador desativar o filtro "Apenas Utilizadas", mostra todas as 36 rúbricas oficiais
     if (!showOnlyNonZeroPivot) {
       OFFICIAL_SISTAFE_RUBRICAS.forEach((item) => {
         const fullLabel = `${item.code} - ${item.name}`;
@@ -1173,16 +1178,15 @@ export default function AcaoOrcamentalView({
           label: fullLabel,
           totalQuant: 0,
           totalValor: 0,
-          itemsMap: {},
+          necessidadesMap: {},
         };
       });
-
       map["(em branco)"] = {
         code: "999999",
         label: "(em branco)",
         totalQuant: 0,
         totalValor: 0,
-        itemsMap: {},
+        necessidadesMap: {},
       };
     }
 
@@ -1192,9 +1196,7 @@ export default function AcaoOrcamentalView({
       if (Array.isArray(act.rubricas) && act.rubricas.length > 0) {
         act.rubricas.forEach((r: any) => {
           const rubStr = String(r.rubrica || r.nomeRubrica || r.code || "").trim();
-          const necStr = String(
-            r.necessidade || r.descricao || r.nomeProduto || r.item || act.designacao || act.title || ""
-          ).trim();
+          const necStr = String(r.necessidade || r.descricao || r.nomeProduto || r.item || act.designacao || act.title || "").trim();
           const prodName = String(r.nomeProduto || r.especificacao || r.produto || r.item || "").trim();
           const qty = Number(r.quantidade || r.qtd || 1);
           const val = Number(r.valorTotal || r.total || r.valor || r.precoTotal || 0);
@@ -1210,36 +1212,44 @@ export default function AcaoOrcamentalView({
                 label: targetLabel,
                 totalQuant: 0,
                 totalValor: 0,
-                itemsMap: {},
+                necessidadesMap: {},
               };
             }
-
             map[targetLabel].totalQuant += qty;
             map[targetLabel].totalValor += val;
 
-            const itemKey = `${necStr}${prodName ? ` [Produto: ${prodName}]` : ""}`;
-            if (!map[targetLabel].itemsMap[itemKey]) {
-              map[targetLabel].itemsMap[itemKey] = {
-                label: necStr,
-                nomeProduto: prodName,
+            const nLabel = necStr || "Sem Necessidade";
+            if (!map[targetLabel].necessidadesMap[nLabel]) {
+              map[targetLabel].necessidadesMap[nLabel] = {
+                label: nLabel,
+                totalQuant: 0,
+                totalValor: 0,
+                bensMap: {},
+              };
+            }
+            map[targetLabel].necessidadesMap[nLabel].totalQuant += qty;
+            map[targetLabel].necessidadesMap[nLabel].totalValor += val;
+
+            const bLabel = prodName || "Sem Produto";
+            const bemKey = `${bLabel}_${r.especificacao || ""}`;
+
+            if (!map[targetLabel].necessidadesMap[nLabel].bensMap[bemKey]) {
+              map[targetLabel].necessidadesMap[nLabel].bensMap[bemKey] = {
+                nomeProduto: bLabel,
                 quant: 0,
                 valor: 0,
                 precoUnitario: pUnit,
                 especificacao: r.especificacao || "",
-                count: 0,
               };
             }
-            map[targetLabel].itemsMap[itemKey].quant += qty;
-            map[targetLabel].itemsMap[itemKey].valor += val;
-            map[targetLabel].itemsMap[itemKey].count += 1;
+            map[targetLabel].necessidadesMap[nLabel].bensMap[bemKey].quant += qty;
+            map[targetLabel].necessidadesMap[nLabel].bensMap[bemKey].valor += val;
           }
         });
       }
 
       if (!hasRubrica) {
-        const val = Number(
-          act.valor || act.orcamentoTotal || act.valorTotal || act.orcamento || act.custoTotal || 0
-        );
+        const val = Number(act.valor || act.orcamentoTotal || act.valorTotal || act.orcamento || act.custoTotal || 0);
         const qty = Number(act.quantidade || act.qtd || 1);
         const rubStr = String(act.rubrica || act.categoria || "").trim();
         const necStr = String(act.necessidade || act.designacao || act.title || "").trim();
@@ -1252,25 +1262,36 @@ export default function AcaoOrcamentalView({
               label: targetLabel,
               totalQuant: 0,
               totalValor: 0,
-              itemsMap: {},
+              necessidadesMap: {},
             };
           }
 
           map[targetLabel].totalQuant += qty;
           map[targetLabel].totalValor += val;
 
-          const itemKey = necStr || "Atividade Planificada";
-          if (!map[targetLabel].itemsMap[itemKey]) {
-            map[targetLabel].itemsMap[itemKey] = {
-              label: itemKey,
-              quant: 0,
-              valor: 0,
-              count: 0,
+          const nLabel = necStr || "Atividade Planificada";
+          if (!map[targetLabel].necessidadesMap[nLabel]) {
+            map[targetLabel].necessidadesMap[nLabel] = {
+              label: nLabel,
+              totalQuant: 0,
+              totalValor: 0,
+              bensMap: {},
             };
           }
-          map[targetLabel].itemsMap[itemKey].quant += qty;
-          map[targetLabel].itemsMap[itemKey].valor += val;
-          map[targetLabel].itemsMap[itemKey].count += 1;
+          map[targetLabel].necessidadesMap[nLabel].totalQuant += qty;
+          map[targetLabel].necessidadesMap[nLabel].totalValor += val;
+          
+          const bemKey = "Sem Produto_";
+          if (!map[targetLabel].necessidadesMap[nLabel].bensMap[bemKey]) {
+            map[targetLabel].necessidadesMap[nLabel].bensMap[bemKey] = {
+              nomeProduto: "Sem Produto",
+              quant: 0,
+              valor: 0,
+              precoUnitario: (qty > 0 ? val / qty : 0),
+            };
+          }
+          map[targetLabel].necessidadesMap[nLabel].bensMap[bemKey].quant += qty;
+          map[targetLabel].necessidadesMap[nLabel].bensMap[bemKey].valor += val;
         }
       }
     });
@@ -1278,7 +1299,7 @@ export default function AcaoOrcamentalView({
     return Object.values(map)
       .filter((row) => !showOnlyNonZeroPivot || row.totalValor > 0 || row.totalQuant > 0)
       .sort((a, b) => a.code.localeCompare(b.code));
-  }, [sectorActivities]);
+  }, [sectorActivities, showOnlyNonZeroPivot]);
 
   const sistafeGrandTotals = useMemo(() => {
     return sistafePivotData.reduce(
@@ -2303,7 +2324,8 @@ export default function AcaoOrcamentalView({
 
                     return filteredRows.map((row, idx) => {
                       const isExpanded = !!expandedPivotRows[row.label];
-                      const hasItems = Object.keys(row.itemsMap).length > 0;
+                      const necessidades = Object.values(row.necessidadesMap || {});
+                      const hasItems = necessidades.length > 0;
 
                       return (
                         <React.Fragment key={idx}>
@@ -2324,12 +2346,8 @@ export default function AcaoOrcamentalView({
                                 <span>{row.label}</span>
                               </div>
                             </td>
-                            <td className="p-3 border border-slate-200 text-slate-600">
-                              —
-                            </td>
-                            <td className="p-3 border border-slate-200 text-slate-600">
-                              —
-                            </td>
+                            <td className="p-3 border border-slate-200 text-slate-600">—</td>
+                            <td className="p-3 border border-slate-200 text-slate-600">—</td>
                             <td className="p-3 text-center border border-slate-200 font-mono font-bold text-blue-900">
                               {row.totalQuant > 0 ? row.totalQuant.toLocaleString("pt-MZ") : "—"}
                             </td>
@@ -2345,32 +2363,76 @@ export default function AcaoOrcamentalView({
 
                           {/* Sub-itens Expandidos (Necessidades & Produtos) */}
                           {isExpanded && hasItems &&
-                            Object.values(row.itemsMap).map((item: any, iIdx) => (
-                              <tr key={iIdx} className="border-b border-slate-100 bg-slate-50/70 text-slate-700">
-                                <td className="p-3 border border-slate-200 font-mono text-[10px] text-slate-400">
-                                  {String(idx + 1).padStart(2, "0")}.{iIdx + 1}
-                                </td>
-                                <td className="p-3 border border-slate-200 font-medium text-slate-600">
-                                  ↳ {row.label}
-                                </td>
-                                <td className="p-3 border border-slate-200 font-semibold text-slate-800">
-                                  {item.label}
-                                </td>
-                                <td className="p-3 border border-slate-200 font-medium text-slate-700">
-                                  {item.nomeProduto || "—"}
-                                  {item.especificacao && <div className="text-[10px] text-slate-500 italic">{item.especificacao}</div>}
-                                </td>
-                                <td className="p-3 text-center border border-slate-200 font-mono font-bold text-blue-900 bg-blue-50/40">
-                                  {item.quant > 0 ? item.quant.toLocaleString("pt-MZ") : "—"}
-                                </td>
-                                <td className="p-3 text-right border border-slate-200 font-mono font-semibold text-slate-800">
-                                  {item.valor.toLocaleString("pt-MZ", {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  }) + " MZN"}
-                                </td>
-                              </tr>
-                            ))}
+                            necessidades.map((nec: any, nIdx) => {
+                              const necExpandedKey = `${row.label}|${nec.label}`;
+                              const isNecExpanded = !!expandedPivotRows[necExpandedKey];
+                              const bens = Object.values(nec.bensMap || {});
+                              const hasBens = bens.length > 0;
+
+                              return (
+                                <React.Fragment key={nIdx}>
+                                  <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-700">
+                                    <td className="p-3 border border-slate-200 font-mono text-[10px] text-slate-400">
+                                      {String(idx + 1).padStart(2, "0")}.{nIdx + 1}
+                                    </td>
+                                    <td className="p-3 border border-slate-200 font-medium text-slate-600">
+                                      ↳ {row.label}
+                                    </td>
+                                    <td className="p-3 border border-slate-200 font-semibold text-slate-800">
+                                      <div className="flex items-center gap-2">
+                                        {hasBens && (
+                                            <button
+                                            type="button"
+                                            onClick={() => toggleExpandPivotRow(necExpandedKey)}
+                                            className="w-4 h-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[10px] font-black text-slate-500 hover:bg-slate-100 cursor-pointer shrink-0"
+                                            >
+                                            {isNecExpanded ? "−" : "+"}
+                                            </button>
+                                        )}
+                                        <span>{nec.label}</span>
+                                      </div>
+                                    </td>
+                                    <td className="p-3 border border-slate-200 font-medium text-slate-700">—</td>
+                                    <td className="p-3 text-center border border-slate-200 font-mono font-bold text-blue-900 bg-blue-50/40">
+                                      {nec.totalQuant > 0 ? nec.totalQuant.toLocaleString("pt-MZ") : "—"}
+                                    </td>
+                                    <td className="p-3 text-right border border-slate-200 font-mono font-semibold text-slate-800">
+                                      {nec.totalValor.toLocaleString("pt-MZ", {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                      }) + " MZN"}
+                                    </td>
+                                  </tr>
+                                  {isNecExpanded && hasBens &&
+                                    bens.map((bem: any, bIdx) => (
+                                      <tr key={`bem-${bIdx}`} className="border-b border-slate-50 bg-white text-slate-600">
+                                        <td className="p-3 border border-slate-200 font-mono text-[10px] text-slate-300 text-right pr-4">
+                                          {bIdx + 1}
+                                        </td>
+                                        <td className="p-3 border border-slate-200 font-medium text-slate-400">—</td>
+                                        <td className="p-3 border border-slate-200 font-medium text-slate-500 pl-8">
+                                          ↳ {nec.label}
+                                        </td>
+                                        <td className="p-3 border border-slate-200 font-medium text-slate-700">
+                                          {bem.nomeProduto}
+                                          {bem.especificacao && <div className="text-[10px] text-slate-500 italic">{bem.especificacao}</div>}
+                                        </td>
+                                        <td className="p-3 text-center border border-slate-200 font-mono text-slate-600">
+                                          {bem.quant > 0 ? bem.quant.toLocaleString("pt-MZ") : "—"}
+                                        </td>
+                                        <td className="p-3 text-right border border-slate-200 font-mono text-slate-600">
+                                          {bem.valor.toLocaleString("pt-MZ", {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2,
+                                          }) + " MZN"}
+                                        </td>
+                                      </tr>
+                                    ))
+                                  }
+                                </React.Fragment>
+                              );
+                            })
+                          }
                         </React.Fragment>
                       );
                     });
@@ -2435,21 +2497,35 @@ export default function AcaoOrcamentalView({
                             : "0,00"}
                         </td>
                       </tr>
-                      {Object.values(row.itemsMap).map((item: any, iIdx) => (
-                        <tr key={iIdx} className="border-b border-slate-200 text-slate-700 bg-white">
-                          <td className="p-1.5 pl-8 border border-slate-300 font-normal text-slate-700 text-[11px]" style={{ letterSpacing: '0.3px' }}>
-                            └─ {item.label}
-                            {item.nomeProduto && ` [Produto: ${item.nomeProduto}]`}
-                            {item.quant > 0 && ` (${item.quant} un/L${item.precoUnitario ? ` × ${item.precoUnitario} MT` : ""})`}
-                            {item.especificacao && ` - ${item.especificacao}`}
-                          </td>
-                          <td className="p-1.5 text-right border border-slate-300 font-mono text-slate-800 text-[11px]" style={{ letterSpacing: '0.3px' }}>
-                            {item.valor.toLocaleString("pt-MZ", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </td>
-                        </tr>
+                      {Object.values(row.necessidadesMap || {}).map((nec: any, nIdx) => (
+                        <React.Fragment key={`nec-${nIdx}`}>
+                          <tr className="border-b border-slate-200 text-slate-700 bg-white">
+                            <td className="p-1.5 pl-8 border border-slate-300 font-bold text-slate-800 text-[11px]" style={{ letterSpacing: '0.3px' }}>
+                              └─ {nec.label}
+                            </td>
+                            <td className="p-1.5 text-right border border-slate-300 font-mono text-slate-800 text-[11px]" style={{ letterSpacing: '0.3px' }}>
+                              {nec.totalValor.toLocaleString("pt-MZ", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </td>
+                          </tr>
+                          {Object.values(nec.bensMap || {}).map((bem: any, bIdx) => (
+                            <tr key={`bem-${nIdx}-${bIdx}`} className="border-b border-slate-100 text-slate-600 bg-slate-50">
+                              <td className="p-1.5 pl-12 border border-slate-300 font-normal text-slate-600 text-[10px]" style={{ letterSpacing: '0.2px' }}>
+                                └─ {bem.nomeProduto}
+                                {bem.quant > 0 && ` (${bem.quant} un/L${bem.precoUnitario ? ` × ${bem.precoUnitario} MT` : ""})`}
+                                {bem.especificacao && ` - ${bem.especificacao}`}
+                              </td>
+                              <td className="p-1.5 text-right border border-slate-300 font-mono text-slate-600 text-[10px]">
+                                {bem.valor.toLocaleString("pt-MZ", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
                       ))}
                     </React.Fragment>
                   ))}

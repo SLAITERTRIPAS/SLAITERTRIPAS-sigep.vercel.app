@@ -198,10 +198,12 @@ export default function LoginScreen({
     try {
       await firestoreService.password_reset_requests.add({
         identifier: identifier,
+        userName: contactName || identifier,
         status: "Pendente",
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
+        message: "Solicitação de redefinição de senha realizada diretamente pelo utilizador.",
       });
-      setSuccess("Pedido de redefinição enviado com sucesso. Aguarde a notificação do Administrador.");
+      setSuccess("Pedido de redefinição enviado com sucesso ao Administrador. Aguarde a validação em tempo real.");
       setRequestReset(false);
     } catch (e) {
       setError("Erro ao enviar pedido.");
@@ -747,23 +749,28 @@ export default function LoginScreen({
         }
 
         // Garantir que utilizadores autenticados nunca mais precisem de alterar a senha obrigatoriamente
-        user.mustChangePassword = false;
+        // Gerar Token de Sessão Única e guardar localmente e no Firestore
+        const newSessionId = "sess_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem("sigep_active_session_id", newSessionId);
 
         if (matchedDoc && !isQuotaError) {
           updateDoc(doc(db, "users", matchedDoc.id), {
             mustChangePassword: false,
             isFirstAccess: false,
+            activeSessionId: newSessionId,
+            lastLoginAt: new Date().toISOString(),
           }).catch(console.warn);
         }
         user.mustChangePassword = false;
 
         // Guardar utilizador no cache local
-        saveUserToCache({ ...user, password: password || user.password });
+        saveUserToCache({ ...user, activeSessionId: newSessionId, password: password || user.password });
 
         setSuccess(`BEM VINDO À SIGEP`);
         setTimeout(() => {
           onLogin({
             ...user,
+            activeSessionId: newSessionId,
             userArea: {
               unidade: user.unidade,
               direcao: user.direcao,
@@ -957,6 +964,19 @@ export default function LoginScreen({
 
         const finalUser = { ...newUser, id: docId || "local_" + Date.now() };
         saveUserToCache(finalUser);
+        // Remove notificação de password_reset_requests pendente se existir
+        try {
+          const resetReqQuery = query(collection(db, "password_reset_requests"), where("status", "==", "Pendente"));
+          const reqSnap = await getDocs(resetReqQuery);
+          reqSnap.forEach(async (resetDoc) => {
+            const data = resetDoc.data();
+            if (data.identifier === matchedUser.name || data.identifier === matchedUser.nuit || data.identifier === matchedUser.email || data.identifier === matchedUser.id) {
+              await firestoreService.password_reset_requests.delete(resetDoc.id);
+            }
+          });
+        } catch (err) {
+          console.error("Erro ao limpar reset requests:", err);
+        }
 
         setSuccess("Senha criada com sucesso!");
         setTimeout(() => {
@@ -1428,8 +1448,17 @@ export default function LoginScreen({
                         read: false,
                       });
 
+                      // Notificação em tempo real para o painel de redefinições do administrador
+                      await firestoreService.password_reset_requests.add({
+                        identifier: contactId || contactName,
+                        userName: contactName,
+                        status: "Pendente",
+                        timestamp: new Date().toISOString(),
+                        message: contactText || "Solicitação de redefinição de senha enviada pelo utilizador.",
+                      });
+
                       alert(
-                        "Solicitação enviada com sucesso ao administrador. Por favor, aguarde o contacto.",
+                        "Solicitação enviada com sucesso em tempo real ao Administrador. Por favor, aguarde a redefinição.",
                       );
                       setShowContactAdmin(false);
                       setContactText("");

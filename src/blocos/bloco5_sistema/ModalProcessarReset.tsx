@@ -68,31 +68,28 @@ export default function ModalProcessarReset({
         }
       }
 
-      if (userDocId) {
-        const res = await (firestoreService as any).resetUserPasswordToDefault(userDocId);
-        if (!res.success) {
-          throw new Error(res.error || "Erro ao redefinir senha.");
-        }
+        if (userDocId) {
+          const res = await (firestoreService as any).resetUserPasswordToDefault(userDocId);
+          if (!res.success) {
+            throw new Error(res.error || "Erro de redefinição de senha.");
+          }
 
-        // Mark request as processed
-        await firestoreService.password_reset_requests.update(request.id, {
-            status: "Processado",
-            processedBy: user?.name || "Administrador",
-            processedAt: new Date().toISOString(),
-        });
-        
-        alert(`Senha de ${request.identifier} redefinida com sucesso para '1234'.`);
-        onComplete();
-        onClose();
-      } else {
-        alert("Utilizador não encontrado na base de dados para o identificador: " + identifier);
+          // Mark request as processed
+          // Remove a notificação permanentemente
+          await firestoreService.password_reset_requests.delete(request.id);
+          
+          alert("Senha redefinida com sucesso.");
+          onComplete();
+          onClose();
+        } else {
+          alert("Erro de redefinição de senha: Utilizador não encontrado na base de dados.");
+          setIsSubmitting(false);
+        }
+      } catch (error) {
+        console.error("Erro ao redefinir senha:", error);
+        alert("Erro de redefinição de senha");
         setIsSubmitting(false);
       }
-    } catch (error) {
-      console.error("Erro ao redefinir senha:", error);
-      alert("Erro ao processar redefinição de senha: " + (error instanceof Error ? error.message : String(error)));
-      setIsSubmitting(false);
-    }
   };
   
   return (

@@ -58,6 +58,8 @@ import {
   getRoles,
   canAccessArea,
   isDPEPUser,
+  isDepartmentMatch,
+  isUnitBelongsToDirection,
 } from "../../lib/auth";
 import {
   isMatch,
@@ -102,23 +104,6 @@ import {
 
 // Standard divisions and sectors of ISPS for mock grouping if not filled
 const DEV_SECTORS = Object.keys(REPARTICOES);
-
-const isDepartmentMatch = (deptA?: string, deptB?: string): boolean => {
-  if (!deptA || !deptB) return false;
-  const norm = (s: string) =>
-    String(s || "")
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/^(departamento|diretor do curso|direccao|direcao|divisao|reparticao|setor|chefe do|chefe de|depto|dep)\s+(de\s+|da\s+|dos\s+|do\s+)?/gi, "")
-      .replace(/ (de|da|do|dos|das) /gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  const a = norm(deptA);
-  const b = norm(deptB);
-  if (!a || !b) return false;
-  return a === b || a.includes(b) || b.includes(a);
-};
 
 const GABINETES_DESTINATARIOS = [
   "Gabinete do Diretor Geral",
@@ -247,6 +232,8 @@ export default function PlanoWorkflowView({
   } | null>(null);
   const [activityForHistory, setActivityForHistory] = useState<any | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+
   const [selectedYear, setSelectedYear] = useState<number>(2027);
   const isReadOnly = selectedYear < 2027;
   const [showYearMenu, setShowYearMenu] = useState(false);
@@ -257,6 +244,7 @@ export default function PlanoWorkflowView({
   const [syncYear, setSyncYear] = useState<number>(2027);
   const [availablePlans, setAvailablePlans] = useState<any[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string>("");
+  const [isInstitucional, setIsInstitucional] = useState(false);
 
   // Novo estado para gerir o fluxo de planeamento/consulta
   // Add print styles for A3
@@ -402,6 +390,12 @@ export default function PlanoWorkflowView({
       if (!a) return false;
       if (isDPEP || isSuperBossUser(user) || isPlanificacao) return true;
 
+      // Direção Geral (DG) tem acesso institucional total
+      const roles = getRoles(user?.title || user?.cargo || user?.cargoChefia || user?.role || "");
+      if (roles.isDG) {
+        return true;
+      }
+
       // Se foi criado por este utilizador
       const creator = String(a.createdBy || a.emailCriador || "").toLowerCase();
       const uEmail = String(user?.email || "").toLowerCase();
@@ -410,21 +404,78 @@ export default function PlanoWorkflowView({
         return true;
       }
 
-      // Correspondência por departamento, unidade, direção, curso, setor, repartição
-      return (
-        isDepartmentMatch(a.departamento, user?.departamento) ||
-        isDepartmentMatch(a.departamento, title) ||
-        isDepartmentMatch(a.unidadeOrganica, title) ||
-        isDepartmentMatch(a.unidadeOrganica, user?.unidadeOrganica) ||
-        isDepartmentMatch(a.direcao, user?.direcao) ||
-        isDepartmentMatch(a.direcao, title) ||
-        isDepartmentMatch(a.curso, title) ||
-        isDepartmentMatch(a.curso, user?.curso) ||
-        isDepartmentMatch(a.setor, title) ||
-        isDepartmentMatch(a.reparticao, title) ||
-        isDepartmentMatch(a.setor, user?.setor) ||
-        isDepartmentMatch(a.reparticao, user?.reparticao)
-      );
+      // Partilha explícita entre departamentos/setores
+      const uDept = user?.departamento || "";
+      const uSetor = user?.setor || user?.reparticao || "";
+      const uCurso = user?.curso || "";
+
+      const sharedDepts = [
+        a.departamentoDestinatario,
+        a.paraDepartamento,
+        a.destinatario,
+        a.orgaoDestinatario,
+        a.departamentoDestino,
+        ...(Array.isArray(a.destinatarios) ? a.destinatarios : []),
+        ...(Array.isArray(a.partilhadoCom) ? a.partilhadoCom : []),
+        ...(Array.isArray(a.departamentosDestinatarios) ? a.departamentosDestinatarios : []),
+        ...(Array.isArray(a.sharedWith) ? a.sharedWith : []),
+      ].filter(Boolean);
+
+      const sharedSectors = [
+        a.setorDestinatario,
+        a.reparticaoDestinataria,
+        a.paraSetor,
+        a.setorDestino,
+        ...(Array.isArray(a.setoresDestinatarios) ? a.setoresDestinatarios : []),
+      ].filter(Boolean);
+
+      const isSharedWithUser =
+        (uDept && sharedDepts.some((d: string) => isDepartmentMatch(d, uDept))) ||
+        (uSetor && sharedSectors.some((s: string) => isDepartmentMatch(s, uSetor)));
+
+      if (isSharedWithUser) {
+        return true;
+      }
+
+      // Correspondência por departamento
+      if (uDept && a.departamento) {
+        if (isDepartmentMatch(a.departamento, uDept)) {
+          if (uSetor && a.setor) {
+            return isDepartmentMatch(a.setor, uSetor);
+          }
+          return true;
+        }
+        return false;
+      }
+
+      // Correspondência por setor / repartição
+      if (uSetor && (a.setor || a.reparticao)) {
+        return (
+          isDepartmentMatch(a.setor, uSetor) ||
+          isDepartmentMatch(a.reparticao, uSetor)
+        );
+      }
+
+      // Correspondência por curso
+      if (uCurso && a.curso) {
+        return isDepartmentMatch(a.curso, uCurso);
+      }
+
+      // Se o utilizador pertence a uma Direção/Órgão e a atividade pertence a essa Direção/Órgão ou seus departamentos
+      const uDir = user?.direcao || user?.orgao || title;
+      if (uDir) {
+        if (a.direcao && isDepartmentMatch(a.direcao, uDir)) {
+          return true;
+        }
+        if (a.departamento && isUnitBelongsToDirection(a.departamento, uDir)) {
+          return true;
+        }
+        if (a.unidadeOrganica && isDepartmentMatch(a.unidadeOrganica, uDir)) {
+          return true;
+        }
+      }
+
+      return false;
     },
     [user, title, isDPEP, isPlanificacao]
   );
@@ -1321,14 +1372,13 @@ export default function PlanoWorkflowView({
       if (found) return found;
     }
 
-    return "DICOSAFA";
+    return "";
   };
 
   const directionKey = getDirectionKeysMatched(title, user?.departamento);
   const departmentsForThisDirection =
-    DEPARTAMENTOS[directionKey as keyof typeof DEPARTAMENTOS] ||
-    DEPARTAMENTOS[directionKey] ||
-    DEPARTAMENTOS["DICOSAFA"] ||
+    (directionKey && DEPARTAMENTOS[directionKey as keyof typeof DEPARTAMENTOS]) ||
+    (directionKey && DEPARTAMENTOS[directionKey]) ||
     [];
 
   const directionDepartmentBudgets = useMemo(() => {
@@ -1713,7 +1763,7 @@ export default function PlanoWorkflowView({
       (a) =>
         (a.status as any) === "planificacao" &&
         !a.isPESOE &&
-        (isSuperBossUser(user) || a.direcao === user?.direcao)
+        (isSuperBossUser(user) || isActivityInScope(a))
     );
 
     const productMap: {
@@ -3002,7 +3052,7 @@ export default function PlanoWorkflowView({
       const act = rawActivities.find((a) => a.id === deleteConfirmId);
       await firestoreService.matrixActivities.delete(deleteConfirmId);
       setRawActivities((prev) => prev.filter((a) => a.id !== deleteConfirmId));
-      onShowAlert("Dados excluídos com sucesso");
+      onShowAlert("excluiu as atividades selecionadas com sucesso");
       if (act) {
         await firestoreService.resequenceActivitiesAfterDelete(
           "matrix_activities",
@@ -3014,6 +3064,30 @@ export default function PlanoWorkflowView({
       onShowAlert("Erro ao excluir: " + error.message);
     } finally {
       setDeleteConfirmId(null);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedActivityIds.length === 0) return;
+    setShowBatchDeleteConfirm(true);
+  };
+
+  const confirmBatchDelete = async () => {
+    setShowBatchDeleteConfirm(false);
+    setIsLoading(true);
+    try {
+      for (const id of selectedActivityIds) {
+        await firestoreService.matrixActivities.delete(id);
+      }
+      setRawActivities((prev) =>
+        prev.filter((a) => !selectedActivityIds.includes(a.id)),
+      );
+      setSelectedActivityIds([]);
+      onShowAlert("excluiu as atividades selecionadas com sucesso");
+    } catch (error: any) {
+      onShowAlert("Erro ao excluir em lote: " + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -3588,6 +3662,7 @@ export default function PlanoWorkflowView({
       "Planificação",
       "Plano Institucional",
     );
+    setIsInstitucional(true);
   };
 
   // Filters
@@ -4573,84 +4648,7 @@ export default function PlanoWorkflowView({
                                               onToggleSelect={
                                                 handleToggleSelectActivity
                                               }
-                                              actions={
-                                                <div className="flex items-center justify-center gap-2">
-                                                  {canEdit(activity) ? (
-                                                    <>
-                                                      <button
-                                                        onClick={() => {
-                                                          setEditingActivity(
-                                                            activity,
-                                                          );
-                                                          setShowAddForm(true);
-                                                        }}
-                                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                        title="Editar"
-                                                      >
-                                                        <Edit2 size={14} />
-                                                      </button>
-                                                      <button
-                                                        onClick={() =>
-                                                          handleDelete(
-                                                            activity.id,
-                                                          )
-                                                        }
-                                                        className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                                        title="Eliminar"
-                                                      >
-                                                        <Trash2 size={14} />
-                                                      </button>
-                                                    </>
-                                                  ) : (
-                                                    <button
-                                                      onClick={() => {
-                                                        setEditingActivity(
-                                                          activity,
-                                                        );
-                                                        setShowAddForm(true);
-                                                      }}
-                                                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                      title="Visualizar"
-                                                    >
-                                                      <Eye size={14} />
-                                                    </button>
-                                                  )}
-                                                  <button
-                                                    onClick={() => {
-                                                      const currentStatus = activity.status || "draft";
-                                                      const nextStatus = (currentStatus === "draft" || currentStatus === "setorial") ? "reparticao" :
-                                                                       currentStatus === "reparticao" ? "departamento" :
-                                                                       currentStatus === "departamento" ? "direcao" :
-                                                                       currentStatus === "direcao" ? "planificacao" :
-                                                                       currentStatus === "planificacao" ? "dpep_chefe" : "institucional";
-                                                      const originLabel = currentStatus === "reparticao" ? "Repartição" :
-                                                                          currentStatus === "departamento" ? "Departamento" :
-                                                                          currentStatus === "direcao" ? "Direção" :
-                                                                          currentStatus === "planificacao" ? "Setor de Planificação" : "Chefe do DPEP";
-                                                      const destLabel = nextStatus === "departamento" ? "Departamento" :
-                                                                        nextStatus === "direcao" ? "Direção" :
-                                                                        nextStatus === "planificacao" ? "Setor de Planificação" :
-                                                                        nextStatus === "dpep_chefe" ? "Chefe do DPEP" : "Plano Institucional";
-                                                      handleWorkflowTransition(currentStatus, nextStatus, originLabel, destLabel, [activity]);
-                                                    }}
-                                                    className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                                                    title="Tramitar / Assinar Documento"
-                                                  >
-                                                    <Send size={14} />
-                                                  </button>
-                                                  <button
-                                                    onClick={() =>
-                                                      handleExportPDF([
-                                                        activity,
-                                                      ])
-                                                    }
-                                                    className="p-2 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
-                                                    title="Exportar PDF"
-                                                  >
-                                                    <FileText size={14} />
-                                                  </button>
-                                                </div>
-                                              }
+                                              
                                             />
                                           ),
                                         )}
@@ -4773,50 +4771,7 @@ export default function PlanoWorkflowView({
                               rawActivities={rawActivities}
                               selectedActivityIds={selectedActivityIds}
                               onToggleSelect={handleToggleSelectActivity}
-                              actions={
-                                !canEdit(activity) ? (
-                                  <div className="flex justify-center items-center gap-2">
-                                    <Lock size={12} className="text-slate-400" />
-                                    <button
-                                      onClick={() => {
-                                        setEditingActivity(activity);
-                                        setShowAddForm(true);
-                                      }}
-                                      className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                      title="Visualizar"
-                                    >
-                                      <Eye size={13} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDelete(activity.id)}
-                                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
-                                    title="Remover"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex justify-center gap-1">
-                                  <button
-                                    onClick={() => {
-                                      setEditingActivity(activity);
-                                      setShowAddForm(true);
-                                    }}
-                                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                    title="Editar"
-                                  >
-                                    <Edit2 size={13} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(activity.id)}
-                                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
-                                    title="Remover"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </div>
-                              )
-                            }
+                              
                           />
                         ))}
                         {filteredActivities.filter(
@@ -4824,7 +4779,7 @@ export default function PlanoWorkflowView({
                         ).length === 0 && (
                           <tr>
                             <td
-                              colSpan={37}
+                              colSpan={18}
                               className="p-12 text-center text-slate-400 italic font-medium"
                             >
                               Nenhuma atividade planificada na repartição.
@@ -4993,63 +4948,13 @@ export default function PlanoWorkflowView({
                                 rawActivities={rawActivities}
                                 selectedActivityIds={selectedActivityIds}
                                 onToggleSelect={handleToggleSelectActivity}
-                                actions={
-                                  !canEdit(activity) ? (
-                                    <div className="flex justify-center items-center gap-2">
-                                      <Lock
-                                        size={12}
-                                        className="text-slate-400"
-                                      />
-                                      <button
-                                        onClick={() => {
-                                          setEditingActivity(activity);
-                                          setShowAddForm(true);
-                                        }}
-                                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                        title="Visualizar"
-                                      >
-                                        <Eye size={13} />
-                                      </button>
-                                      <button
-                                        onClick={() =>
-                                          handleDelete(activity.id)
-                                        }
-                                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
-                                        title="Remover"
-                                      >
-                                        <Trash2 size={13} />
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div className="flex justify-center gap-1">
-                                      <button
-                                        onClick={() => {
-                                          setEditingActivity(activity);
-                                          setShowAddForm(true);
-                                        }}
-                                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                        title="Editar"
-                                      >
-                                        <Edit2 size={13} />
-                                      </button>
-                                      <button
-                                        onClick={() =>
-                                          handleDelete(activity.id)
-                                        }
-                                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
-                                        title="Remover"
-                                      >
-                                        <Trash2 size={13} />
-                                      </button>
-                                    </div>
-                                  )
-                                }
+                                
                               />
                             ))}
                           {filteredActivities.filter((a) => isActivityInScope(a)).length === 0 && (
                             <tr>
                               <td
-                                colSpan={37}
+                                colSpan={18}
                                 className="p-12 text-center text-slate-400 italic font-medium"
                               >
                                 Nenhuma atividade no plano próprio do
@@ -5144,26 +5049,13 @@ export default function PlanoWorkflowView({
                                     getActivityTotal={getActivityTotal}
                                     onUpdateExecution={onUpdateExecution}
                                     onUpdateRelatorio={onUpdateRelatorio}
-                                    actions={
-                                      <div className="flex justify-center items-center gap-2">
-                                        <button
-                                          onClick={() => {
-                                            setEditingActivity(act);
-                                            setShowAddForm(true);
-                                          }}
-                                          className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                          title="Visualizar"
-                                        >
-                                          <Eye size={13} />
-                                        </button>
-                                      </div>
-                                    }
+                                    
                                   />
                                 ))}
                                 {sectorActs.length === 0 && (
                                   <tr>
                                     <td
-                                      colSpan={37}
+                                      colSpan={18}
                                       className="p-6 text-center text-slate-400 text-xs italic font-medium"
                                     >
                                       Nenhuma atividade registada ou submetida
@@ -5395,6 +5287,7 @@ export default function PlanoWorkflowView({
                             direcaoName={user.direcao}
                             departamentoName={dept}
                             year={selectedYear} 
+                            isRecomendado={isInstitucional}
                           />
                           <div className="bg-slate-900 text-white p-6 rounded-t-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                             <div>
@@ -5435,26 +5328,13 @@ export default function PlanoWorkflowView({
                                       getActivityTotal={getActivityTotal}
                                       onUpdateExecution={onUpdateExecution}
                                       onUpdateRelatorio={onUpdateRelatorio}
-                                      actions={
-                                        <div className="flex justify-center items-center gap-2">
-                                          <button
-                                            onClick={() => {
-                                              setEditingActivity(activity);
-                                              setShowAddForm(true);
-                                            }}
-                                            className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                            title="Visualizar"
-                                          >
-                                            <Eye size={13} />
-                                          </button>
-                                        </div>
-                                      }
+                                      
                                     />
                                   ))}
                                   {deptActs.length === 0 && (
                                     <tr>
                                       <td
-                                        colSpan={37}
+                                        colSpan={18}
                                         className="p-6 text-center text-slate-400 text-xs italic font-medium"
                                       >
                                         Nenhuma atividade pendente para este departamento.
@@ -5492,12 +5372,12 @@ export default function PlanoWorkflowView({
                           key={dept}
                           className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm"
                         >
-                          <InstitutionalHeader 
+                          {!isPlanificacao && <InstitutionalHeader 
                             unidadeName={user.unidadeOrganica}
                             direcaoName={user.direcao} 
                             departamentoName={dept}
                             year={selectedYear} 
-                          />
+                          />}
                           <div className="bg-slate-900 text-white p-6 rounded-t-2xl flex flex-col md:flex-row justify-between items-center gap-4">
                             <div>
                                 <span className="inline-block bg-emerald-500/20 text-emerald-300 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-2">
@@ -5537,63 +5417,13 @@ export default function PlanoWorkflowView({
                                     getActivityTotal={getActivityTotal}
                                     onUpdateExecution={onUpdateExecution}
                                     onUpdateRelatorio={onUpdateRelatorio}
-                                    actions={
-                                      !canEdit(activity) ? (
-                                        <div className="flex justify-center items-center gap-2">
-                                          <Lock
-                                            size={12}
-                                            className="text-slate-400"
-                                          />
-                                          <button
-                                            onClick={() => {
-                                              setEditingActivity(activity);
-                                              setShowAddForm(true);
-                                            }}
-                                            className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                            title="Visualizar"
-                                          >
-                                            <Eye size={13} />
-                                          </button>
-                                          <button
-                                            onClick={() =>
-                                              handleDelete(activity.id)
-                                            }
-                                            className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
-                                            title="Remover"
-                                          >
-                                            <Trash2 size={13} />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <div className="flex justify-center gap-1">
-                                          <button
-                                            onClick={() => {
-                                              setEditingActivity(activity);
-                                              setShowAddForm(true);
-                                            }}
-                                            className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                            title="Editar"
-                                          >
-                                            <Edit2 size={13} />
-                                          </button>
-                                          <button
-                                            onClick={() =>
-                                              handleDelete(activity.id)
-                                            }
-                                            className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
-                                            title="Remover"
-                                          >
-                                            <Trash2 size={13} />
-                                          </button>
-                                        </div>
-                                      )
-                                    }
+                                    
                                   />
                                 ))}
                                 {deptActs.length === 0 && (
                                   <tr>
                                     <td
-                                      colSpan={37}
+                                      colSpan={18}
                                       className="p-6 text-center text-slate-400 text-xs italic font-medium"
                                     >
                                       Nenhum plano departamental recebido para
@@ -5745,29 +5575,7 @@ export default function PlanoWorkflowView({
                                     getActivityTotal={getActivityTotal}
                                     onUpdateExecution={onUpdateExecution}
                                     onUpdateRelatorio={onUpdateRelatorio}
-                                    actions={
-                                      <div className="flex justify-center gap-1">
-                                        <button
-                                          onClick={() => {
-                                            setEditingActivity(activity);
-                                            setShowAddForm(true);
-                                          }}
-                                          className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                          title="Editar"
-                                        >
-                                          <Edit2 size={13} />
-                                        </button>
-                                        <button
-                                          onClick={() =>
-                                            handleDelete(activity.id)
-                                          }
-                                          className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
-                                          title="Remover"
-                                        >
-                                          <Trash2 size={13} />
-                                        </button>
-                                      </div>
-                                    }
+                                    
                                   />
                                 ))}
                               {filteredActivities.filter(
@@ -5778,7 +5586,7 @@ export default function PlanoWorkflowView({
                               ).length === 0 && (
                                 <tr>
                                   <td
-                                    colSpan={40}
+                                    colSpan={18}
                                     className="p-20 text-center text-slate-400 font-bold italic uppercase tracking-widest bg-slate-50/50"
                                   >
                                     Nenhuma atividade encontrada para a sua
@@ -5835,7 +5643,7 @@ export default function PlanoWorkflowView({
                                   return (
                                     <tr>
                                       <td
-                                        colSpan={40}
+                                        colSpan={18}
                                         className="p-20 text-center text-slate-400 font-bold italic uppercase tracking-widest bg-slate-50/50"
                                       >
                                         Nenhuma atividade encontrada no sistema.
@@ -5854,7 +5662,7 @@ export default function PlanoWorkflowView({
                                     <React.Fragment key={dept}>
                                       <tr className="bg-slate-100 text-slate-900 border-y border-slate-200">
                                         <td
-                                          colSpan={40}
+                                          colSpan={18}
                                           className="p-3 pl-8 text-[11px] font-extrabold uppercase tracking-wider text-slate-800 bg-slate-50"
                                         >
                                           <div className="flex justify-between items-center">
@@ -5887,29 +5695,7 @@ export default function PlanoWorkflowView({
                                           getActivityTotal={getActivityTotal}
                                           onUpdateExecution={onUpdateExecution}
                                           onUpdateRelatorio={onUpdateRelatorio}
-                                          actions={
-                                            <div className="flex justify-center gap-1">
-                                              <button
-                                                onClick={() => {
-                                                  setEditingActivity(activity);
-                                                  setShowAddForm(true);
-                                                }}
-                                                className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                                title="Editar"
-                                              >
-                                                <Edit2 size={13} />
-                                              </button>
-                                              <button
-                                                onClick={() =>
-                                                  handleDelete(activity.id)
-                                                }
-                                                className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
-                                                title="Remover"
-                                              >
-                                                <Trash2 size={13} />
-                                              </button>
-                                            </div>
-                                          }
+                                          
                                         />
                                       ))}
                                     </React.Fragment>
@@ -6096,7 +5882,6 @@ export default function PlanoWorkflowView({
                                   (isSuperBossUser(user) ||
                                     isDPEP ||
                                     isPlanificacao ||
-                                    a.direcao === user?.direcao ||
                                     isActivityInScope(a)),
                               ).length
                             }{" "}
@@ -6118,7 +5903,6 @@ export default function PlanoWorkflowView({
                                       (isSuperBossUser(user) ||
                                         isDPEP ||
                                         isPlanificacao ||
-                                        a.direcao === user?.direcao ||
                                         isActivityInScope(a)),
                                   )
                                   .sort((a, b) =>
@@ -6155,33 +5939,6 @@ export default function PlanoWorkflowView({
 
                               return (
                                 <React.Fragment key={direction}>
-                                  <tr className="bg-slate-900 text-white border-y-2 border-slate-950 shadow-inner">
-                                    <td
-                                      colSpan={45}
-                                      className="p-4 text-[12px] font-black uppercase tracking-[0.3em] bg-gradient-to-r from-slate-900 to-indigo-900"
-                                    >
-                                      <div className="flex justify-between items-center">
-                                        <span>🏢 DIREÇÃO: {direction}</span>
-                                        <div className="flex gap-4 items-center">
-                                          <span className="bg-white/10 px-3 py-1 rounded-lg border border-white/20">
-                                            {directionTotalActivities} Atividades
-                                          </span>
-                                          <span className="bg-amber-500/20 text-amber-300 px-3 py-1 rounded-lg border border-amber-500/30 font-mono">
-                                            Total Direção:{" "}
-                                            {directionTotalBudget.toLocaleString(
-                                              "pt-MZ",
-                                              {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                              },
-                                            )}{" "}
-                                            MZN
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </td>
-                                  </tr>
-
                                   {Object.entries(deptsMap).map(([deptKey, activities]) => {
                                     const [dept, sector] = deptKey.split("|||");
                                     const sectorTotalBudget = activities.reduce(
@@ -6193,7 +5950,7 @@ export default function PlanoWorkflowView({
                                       <React.Fragment key={deptKey}>
                                         <tr className="bg-slate-100 text-slate-900 border-y border-slate-200">
                                           <td
-                                            colSpan={45}
+                                            colSpan={18}
                                             className="p-3 pl-8 text-[11px] font-extrabold uppercase tracking-wider text-slate-800 bg-slate-50"
                                           >
                                             <div className="flex justify-between items-center">
@@ -6230,29 +5987,7 @@ export default function PlanoWorkflowView({
                                             user={user}
                                             isBossOrAdmin={isBossOrAdmin}
                                             getActivityTotal={getActivityTotal}
-                                            actions={
-                                              <div className="flex justify-center gap-1">
-                                                <button
-                                                  onClick={() => {
-                                                    setEditingActivity(activity);
-                                                    setShowAddForm(true);
-                                                  }}
-                                                  className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                                  title="Editar"
-                                                >
-                                                  <Edit2 size={13} />
-                                                </button>
-                                                <button
-                                                  onClick={() =>
-                                                    handleDelete(activity.id)
-                                                  }
-                                                  className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
-                                                  title="Remover"
-                                                >
-                                                  <Trash2 size={13} />
-                                                </button>
-                                              </div>
-                                            }
+                                            
                                           />
                                         ))}
                                       </React.Fragment>
@@ -6395,11 +6130,11 @@ export default function PlanoWorkflowView({
                                   !a.isPESOE &&
                                   (
                                     isSuperBossUser(user) ||
-                                    a.direcao === user.direcao),
+                                    isActivityInScope(a)),
                               ).length === 0 && (
                                 <tr>
                                   <td
-                                    colSpan={5}
+                                    colSpan={18}
                                     className="p-12 text-center text-slate-400 italic font-medium"
                                   >
                                     Nenhuma atividade encontrada.
@@ -6407,146 +6142,6 @@ export default function PlanoWorkflowView({
                                 </tr>
                               )}
                             </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SUB-TAB: RESUMO POR RÚBRICA */}
-                  {activeSubTab === "necessidades_quantidades" && (
-                    <div className="space-y-2 print:block">
-                      <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-xl shadow-slate-100/50 print:block">
-                        <div className="pb-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                          <div>
-                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-black uppercase tracking-wider mb-2">
-                              <span>📊 Consolidado de Rúbricas Orçamentais</span>
-                            </div>
-                            <h3 className="text-2xl font-black text-slate-900 tracking-tight">
-                              Resumo Consolidado por Rúbrica
-                            </h3>
-                            <p className="text-slate-500 text-xs font-medium mt-1">
-                              Visão geral e consolidação de todas as despesas e rúbricas solicitadas por cada departamento do ISPS.
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const el = document.getElementById("resumo-rubricas-table");
-                                if (el) {
-                                  openPrintDocumentWindow({
-                                    title: `Relatorio_Resumo_Rubricas_${selectedYear}`,
-                                    contentHtml: el.innerHTML,
-                                    orientation: "landscape",
-                                    pageSize: "A4",
-                                  });
-                                }
-                              }}
-                              className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
-                            >
-                              <Printer className="w-4 h-4" />
-                              Imprimir Quadro A4
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Tabela de Rúbricas */}
-                        <div id="resumo-rubricas-table" className="mt-6 overflow-x-auto border border-slate-200 rounded-2xl shadow-xs">
-                          <table className="w-full text-left border-collapse font-sans text-xs">
-                            <thead>
-                              <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
-                                <th className="p-3.5 border-r border-slate-800 w-12 text-center">Nº</th>
-                                <th className="p-3.5 border-r border-slate-800">Rúbrica Mãe (Capítulo)</th>
-                                <th className="p-3.5 border-r border-slate-800">Código / Rúbrica Orçamental</th>
-                                <th className="p-3.5 border-r border-slate-800 text-center">Qtd. Total</th>
-                                <th className="p-3.5 border-r border-slate-800 text-right">Valor Total (MZN)</th>
-                                <th className="p-3.5 border-r border-slate-800">Atividades Associadas (Departamento)</th>
-                                <th className="p-3.5 text-center w-20 print:hidden">Ações</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200 text-slate-700 font-medium">
-                              {groupedRubricasSummary.length > 0 ? (
-                                groupedRubricasSummary.map((item, idx) => (
-                                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                    <td className="p-3.5 text-center font-bold text-slate-500 border-r border-slate-200">
-                                      {idx + 1}
-                                    </td>
-                                    <td className="p-3.5 font-bold text-indigo-900 border-r border-slate-200">
-                                      {item.rubricaMae}
-                                    </td>
-                                    <td className="p-3.5 border-r border-slate-200">
-                                      <div className="flex flex-col gap-0.5">
-                                        {item.codigoRubrica !== "Geral" && (
-                                          <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded w-max">
-                                            Cód: {item.codigoRubrica}
-                                          </span>
-                                        )}
-                                        <span className="font-black text-slate-900 text-sm">{item.nomeRubrica}</span>
-                                      </div>
-                                    </td>
-                                    <td className="p-3.5 text-center font-mono font-bold text-slate-600 border-r border-slate-200 bg-slate-50/50">
-                                      {item.quantidadeTotal.toLocaleString("pt-MZ")}
-                                    </td>
-                                    <td className="p-3.5 text-right font-mono font-black text-emerald-700 border-r border-slate-200 bg-emerald-50/20">
-                                      {item.valorTotal.toLocaleString("pt-MZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MZN
-                                    </td>
-                                    <td className="p-3.5 border-r border-slate-200">
-                                      <div className="flex flex-wrap gap-1.5 max-w-md">
-                                        {item.atividadesList.map((act, actIdx) => (
-                                          <span
-                                            key={actIdx}
-                                            title={act.name}
-                                            className="inline-flex items-center gap-1 text-[10px] bg-slate-100 text-slate-800 px-2 py-1 rounded border border-slate-200"
-                                          >
-                                            <strong className="text-indigo-950 font-black">{act.code}</strong>:
-                                            <span className="truncate max-w-[150px]">{act.name}</span>
-                                            <span className="text-slate-400 font-bold">({act.depto})</span>
-                                          </span>
-                                        ))}
-                                      </div>
-                                    </td>
-                                    <td className="p-3.5 text-center print:hidden">
-                                      {(selectedRoleMode === "Planificação" || user?.email === "slaitertripas@gmail.com") ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteRubric(item.nomeRubrica)}
-                                          className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all cursor-pointer border border-red-100 hover:border-red-600 flex items-center justify-center mx-auto"
-                                          title="Excluir Rúbrica (e todas as atividades associadas de todos os departamentos na matriz)"
-                                        >
-                                          <Trash2 size={14} className="stroke-[2.5px]" />
-                                        </button>
-                                      ) : (
-                                        <span className="text-[10px] text-slate-400 italic">Sem permissão</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))
-                              ) : (
-                                <tr>
-                                  <td colSpan={7} className="p-12 text-center text-slate-400 italic font-medium">
-                                    Nenhuma rúbrica identificada nos planos ativos.
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                            {groupedRubricasSummary.length > 0 && (
-                              <tfoot>
-                                <tr className="bg-slate-900 text-white font-black text-xs">
-                                  <td colSpan={3} className="p-3.5 text-right uppercase tracking-wider border-r border-slate-800">
-                                    Total Consolidado das Rúbricas:
-                                  </td>
-                                  <td className="p-3.5 text-center font-mono font-black text-amber-300 text-sm bg-slate-950 border-r border-slate-800">
-                                    {groupedRubricasSummary.reduce((sum, i) => sum + i.quantidadeTotal, 0).toLocaleString("pt-MZ")}
-                                  </td>
-                                  <td className="p-3.5 text-right font-mono font-black text-emerald-400 text-sm bg-slate-950 border-r border-slate-800" colSpan={1}>
-                                    {groupedRubricasSummary.reduce((sum, i) => sum + i.valorTotal, 0).toLocaleString("pt-MZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MZN
-                                  </td>
-                                  <td colSpan={2}></td>
-                                </tr>
-                              </tfoot>
-                            )}
                           </table>
                         </div>
                       </div>
@@ -6599,9 +6194,8 @@ export default function PlanoWorkflowView({
 
                             const directionKeyForPlan = getDirectionKeysMatched(dirName);
                             const departmentsForThisDirPlan =
-                              DEPARTAMENTOS[directionKeyForPlan as keyof typeof DEPARTAMENTOS] ||
-                              DEPARTAMENTOS[directionKeyForPlan] ||
-                              DEPARTAMENTOS["DICOSAFA"] ||
+                              (directionKeyForPlan && DEPARTAMENTOS[directionKeyForPlan as keyof typeof DEPARTAMENTOS]) ||
+                              (directionKeyForPlan && DEPARTAMENTOS[directionKeyForPlan]) ||
                               [];
 
                             const matchedIds = new Set<string>();
@@ -6618,9 +6212,7 @@ export default function PlanoWorkflowView({
                                     dept === "Gabinete do Diretor-Geral");
                                 const match =
                                   isMainDeptOrBlank ||
-                                  actDept.toLowerCase() === dept.toLowerCase() ||
-                                  actDept.toUpperCase().includes(dept.toUpperCase()) ||
-                                  dept.toUpperCase().includes(actDept.toUpperCase());
+                                  isDepartmentMatch(actDept, dept);
                                 if (match) {
                                   matchedIds.add(a.id);
                                 }
@@ -6697,29 +6289,7 @@ export default function PlanoWorkflowView({
                                                   user={user}
                                                   isBossOrAdmin={isBossOrAdmin}
                                                   getActivityTotal={getActivityTotal}
-                                                  actions={
-                                                    <div className="flex justify-center gap-1">
-                                                      <button
-                                                        onClick={() => {
-                                                          setEditingActivity(activity);
-                                                          setShowAddForm(true);
-                                                        }}
-                                                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                                        title="Editar / Validar"
-                                                      >
-                                                        <Edit2 size={13} />
-                                                      </button>
-                                                      <button
-                                                        onClick={() =>
-                                                          handleDelete(activity.id)
-                                                        }
-                                                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
-                                                        title="Remover"
-                                                      >
-                                                        <Trash2 size={13} />
-                                                      </button>
-                                                    </div>
-                                                  }
+                                                  
                                                 />
                                               ))}
                                             </tbody>
@@ -6762,29 +6332,7 @@ export default function PlanoWorkflowView({
                                                 user={user}
                                                 isBossOrAdmin={isBossOrAdmin}
                                                 getActivityTotal={getActivityTotal}
-                                                actions={
-                                                  <div className="flex justify-center gap-1">
-                                                    <button
-                                                      onClick={() => {
-                                                        setEditingActivity(activity);
-                                                        setShowAddForm(true);
-                                                      }}
-                                                      className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                                      title="Editar / Validar"
-                                                    >
-                                                      <Edit2 size={13} />
-                                                    </button>
-                                                    <button
-                                                      onClick={() =>
-                                                        handleDelete(activity.id)
-                                                      }
-                                                      className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
-                                                      title="Remover"
-                                                    >
-                                                      <Trash2 size={13} />
-                                                    </button>
-                                                  </div>
-                                                }
+                                                
                                               />
                                             ))}
                                           </tbody>
@@ -6798,24 +6346,42 @@ export default function PlanoWorkflowView({
                           })}
                         </div>
                       );
-                    })()
-                  }
+                    })()}
 
                   {/* SUB-TAB 1: PLANO INSTITUCIONAL */}
                   {activeSubTab === "plano_institucional" && (
                     <div className="space-y-2 print:block">
-                      <div className="bg-white border border-slate-200 rounded-3xl p-10 shadow-xl shadow-slate-100/50">
-                        {/* Cabeçalho Oficial Requisitado pelo Usuário */}
-                        <div className="text-center space-y-1 pb-8 mb-8 border-b-2 border-double border-slate-200 uppercase tracking-wider text-slate-800" id="header-plano-institucional">
-                          <p className="text-xs font-bold opacity-75">República de Moçambique</p>
-                          <p className="text-sm font-black text-slate-900">INSTITUTO SUPERIOR POLITÉCNICO DE SONGO</p>
-                          <p className="text-[11px] font-bold">PROVÍNCIA DE TETE</p>
-                          <p className="text-[11px] font-bold">DISTRITO DE CAHORA-BASSA</p>
-                          <p className="text-[11px] font-black text-slate-900 mt-2">GABINETE DO DIRETOR GERAL</p>
-                          <div className="w-16 h-0.5 bg-slate-300 mx-auto my-3"></div>
-                          <h2 className="text-lg font-black text-indigo-900 tracking-widest mt-2 leading-none">
-                            PLANO DE ATIVIDADE INSTITUCIONAL
-                          </h2>
+                      <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm mb-6 flex flex-col gap-4">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                            <div className="bg-blue-600 text-white p-2 rounded-xl">
+                              <ShieldCheck size={20} />
+                            </div>
+                            <div>
+                              <h1 className="text-xl font-black text-slate-900 tracking-tight">PLANO INSTITUCIONAL CONSOLIDADO</h1>
+                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">VISUALIZAÇÃO OFICIAL DO DPEP</p>
+                            </div>
+                          </div>
+                          <div className="bg-slate-50 border border-slate-200 px-4 py-1.5 rounded-full text-xs font-black uppercase text-slate-700 tracking-wider">
+                            PESOE: {selectedYear}
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <h2 className="text-lg font-black text-slate-900 uppercase">INSTRUMENTO DE TRANSFORMAÇÃO</h2>
+                            <p className="text-xs text-slate-500 italic">Organizado estritamente na estrutura: N/O, Direção, Atividade, Orçamento.</p>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="Procurar atividade..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs w-64 focus:ring-2 focus:ring-indigo-500 outline-none"
+                            />
+                            <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                          </div>
                         </div>
 
                         <div className="pb-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start gap-6">
@@ -6927,15 +6493,6 @@ export default function PlanoWorkflowView({
                               ) as [string, any[]][]
                             ).map(([direction, activities]) => (
                               <React.Fragment key={direction}>
-                                <tr className="bg-slate-900 text-white border-2 border-slate-950">
-                                  <td
-                                    colSpan={45}
-                                    className="p-3 text-[11px] font-black uppercase tracking-[0.2em]"
-                                  >
-                                    DIREÇÃO: {direction} — {activities.length}{" "}
-                                    Atividades Planificadas
-                                  </td>
-                                </tr>
                                 {activities.filter(Boolean).map((activity, idx) => (
                                   <ActivityTableRow
                                     key={activity.id}
@@ -6945,29 +6502,6 @@ export default function PlanoWorkflowView({
                                     user={user}
                                     isBossOrAdmin={isBossOrAdmin}
                                     getActivityTotal={getActivityTotal}
-                                    actions={
-                                      <div className="flex justify-center gap-1">
-                                        <button
-                                          onClick={() => {
-                                            setEditingActivity(activity);
-                                            setShowAddForm(true);
-                                          }}
-                                          className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded"
-                                          title="Visualizar/Editar"
-                                        >
-                                          <Edit2 size={13} />
-                                        </button>
-                                        <button
-                                          onClick={() =>
-                                            handleDelete(activity.id)
-                                          }
-                                          className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded"
-                                          title="Remover"
-                                        >
-                                          <Trash2 size={13} />
-                                        </button>
-                                      </div>
-                                    }
                                   />
                                 ))}
                               </React.Fragment>
@@ -6978,7 +6512,7 @@ export default function PlanoWorkflowView({
                             ).length === 0 && (
                               <tr>
                                 <td
-                                  colSpan={37}
+                                  colSpan={18}
                                   className="p-12 text-center text-slate-400 italic font-medium"
                                 >
                                   Nenhuma atividade consolidada para esta área
@@ -7165,208 +6699,6 @@ export default function PlanoWorkflowView({
                           </div>
                         </div>
 
-                        {/* Resumo por Direção e Departamento (Hierarchical Breakdown) */}
-                        <div className="mb-3 bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-xl shadow-slate-100/50 print:hidden">
-                          <div className="bg-slate-900 p-5 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-indigo-500/20 rounded-xl">
-                                <TrendingUp
-                                  size={20}
-                                  className="text-indigo-400"
-                                />
-                              </div>
-                              <h4 className="text-xs font-black uppercase tracking-[0.2em] text-white">
-                                Hierarquia Orçamental Institucional
-                              </h4>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-400 italic">
-                              Consolidação por Direção e Departamento
-                            </span>
-                          </div>
-                          <div className="p-8 space-y-8">
-                            {Object.entries(
-                              filteredActivities
-                                .filter(
-                                  (a) => (a.status as any) === "institucional",
-                                )
-                                .reduce(
-                                  (acc, act) => {
-                                    const dir =
-                                      act.direcao || "ADMINISTRAÇÃO GERAL";
-                                    const dept =
-                                      act.departamento || "GERAL / OUTROS";
-                                    if (!acc[dir])
-                                      acc[dir] = { total: 0, depts: {} };
-                                    if (!acc[dir].depts[dept])
-                                      acc[dir].depts[dept] = 0;
-                                    const val = getActivityTotal(act);
-                                    acc[dir].total += val;
-                                    acc[dir].depts[dept] += val;
-                                    return acc;
-                                  },
-                                  {} as Record<
-                                    string,
-                                    {
-                                      total: number;
-                                      depts: Record<string, number>;
-                                    }
-                                  >,
-                                ),
-                            ).map(
-                              ([dir, data]: [
-                                string,
-                                {
-                                  total: number;
-                                  depts: Record<string, number>;
-                                },
-                              ]) => (
-                                <div
-                                  key={dir}
-                                  className="border-b border-slate-100 last:border-0 pb-8 last:pb-0"
-                                >
-                                  <div className="flex flex-col md:flex-row md:items-end justify-between mb-4 gap-4">
-                                    <div>
-                                      <p className="text-[10px] uppercase font-black text-indigo-600 mb-1 tracking-widest">
-                                        DIREÇÃO
-                                      </p>
-                                      <h5 className="text-xl font-black text-slate-900">
-                                        {dir}
-                                      </h5>
-                                    </div>
-                                    <div className="md:text-right bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
-                                      <p className="text-[9px] uppercase font-black text-slate-400 mb-0.5 tracking-widest">
-                                        TOTAL DIREÇÃO
-                                      </p>
-                                      <p className="text-2xl font-black text-slate-900 tracking-tighter">
-                                        {data.total.toLocaleString("pt-MZ", {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2,
-                                        })}{" "}
-                                        <span className="text-sm font-bold text-slate-400">
-                                          MZN
-                                        </span>
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    {Object.entries(
-                                      data.depts as Record<string, number>,
-                                    ).map(([dept, total]) => (
-                                      <div
-                                        key={dept}
-                                        className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 hover:border-indigo-100 transition-colors"
-                                      >
-                                        <p
-                                          className="text-[9px] uppercase font-bold text-slate-500 mb-1 truncate"
-                                          title={dept}
-                                        >
-                                          {dept}
-                                        </p>
-                                        <p className="text-sm font-black text-slate-800">
-                                          {total.toLocaleString("pt-MZ", {
-                                            minimumFractionDigits: 2,
-                                            maximumFractionDigits: 2,
-                                          })}{" "}
-                                          <span className="text-[10px] text-slate-400">
-                                            MZN
-                                          </span>
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ),
-                            )}
-                          </div>
-                          <div className="bg-indigo-600 p-6 flex justify-between items-center">
-                            <div className="flex items-center gap-3 text-white/80">
-                              <LayoutGrid size={24} />
-                              <span className="text-xs font-black uppercase tracking-[0.2em]">
-                                Resumo Geral Institucional
-                              </span>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">
-                                Orçamento Total Consolidado
-                              </p>
-                              <p className="text-3xl font-black text-white tracking-tighter">
-                                {(
-                                  filteredActivities
-                                    .filter(
-                                      (a) =>
-                                        (a.status as any) === "institucional",
-                                    )
-                                    .reduce(
-                                      (sum, act) => sum + getActivityTotal(act),
-                                      0,
-                                    ) as number
-                                ).toLocaleString("pt-MZ", {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}{" "}
-                                <span className="text-sm font-bold opacity-60">
-                                  MZN
-                                </span>
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* NOVO: Resumo Consolidado por Rúbrica (Rubricas Mães) */}
-                        <div className="mb-3 bg-white rounded-[2rem] border border-slate-200 overflow-hidden shadow-xl shadow-slate-100/50 print:hidden">
-                          <div className="bg-slate-900 p-5 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-emerald-500/20 rounded-xl">
-                                <TrendingUp
-                                  size={20}
-                                  className="text-emerald-400"
-                                />
-                              </div>
-                              <h4 className="text-xs font-black uppercase tracking-[0.2em] text-white">
-                                Resumo Consolidado por Rúbrica (Materiais, Serviços, Ajudas de Custo)
-                              </h4>
-                            </div>
-                          </div>
-                          <div className="p-8">
-                             <p className="text-xs text-slate-500 italic mb-6">Agrupado por Rúbricas Mães (somatório consolidado de todas as rubricas usadas).</p>
-                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {
-                                  Object.values(
-                                    filteredActivities
-                                      .filter((a) => (a.status as any) === "institucional")
-                                      .reduce((acc, act) => {
-                                         const rawRubrica = act.rubrica || (Array.isArray(act.rubricas) && act.rubricas[0]?.rubrica) || "Geral";
-                                         const parent = getParentRubrica(rawRubrica);
-                                         if (!acc[parent]) {
-                                           acc[parent] = { parentName: parent, total: 0, count: 0 };
-                                         }
-                                         const actVal = getActivityTotal(act);
-                                         acc[parent].total += actVal;
-                                         acc[parent].count += 1;
-                                         if (Array.isArray(act.rubricas)) {
-                                           act.rubricas.forEach((r: any) => {
-                                             acc[parent].total += Number(r.valorTotal || r.valor || 0);
-                                           });
-                                         }
-                                         return acc;
-                                      }, {} as Record<string, { parentName: string; total: number; count: number }>)
-                                  ).map((group: { parentName: string; total: number; count: number }) => (
-                                    <div key={group.parentName} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col justify-between">
-                                      <div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Rúbrica Mãe</p>
-                                        <p className="text-sm font-black text-blue-950 mt-1">{group.parentName}</p>
-                                        <p className="text-[11px] text-slate-500 mt-2">{group.count} atividades associadas</p>
-                                      </div>
-                                      <p className="text-base font-black text-emerald-600 mt-4 pt-3 border-t border-slate-200/60">
-                                         {group.total.toLocaleString("pt-MZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px]">MZN</span>
-                                      </p>
-                                    </div>
-                                  ))
-                                }
-                             </div>
-                          </div>
-                        </div>
-
                         {/* PESOE Main Table */}
                         <div className="mt-3 overflow-x-auto print:overflow-visible border border-slate-200 rounded-[2rem] shadow-sm" data-print-type="balanco">
                           <table className="w-full text-left border-collapse min-w-[1900px] print:min-w-full font-sans text-xs print-table-compact">
@@ -7417,52 +6749,6 @@ export default function PlanoWorkflowView({
 
                                 return (
                                   <React.Fragment key={direction}>
-                                    <tr className="bg-slate-900 text-white border-y-2 border-slate-950">
-                                      <td
-                                        colSpan={45}
-                                        className="p-4 text-[12px] font-black uppercase tracking-[0.3em] bg-gradient-to-r from-slate-900 to-indigo-900"
-                                      >
-                                        <div className="flex justify-between items-center">
-                                          <span>🏢 DIREÇÃO: {direction}</span>
-                                          <div className="flex gap-4 items-center">
-                                            <span className="bg-white/10 px-3 py-1 rounded-lg border border-white/20">
-                                              {activities.length} Atividades
-                                            </span>
-                                            <span className="bg-amber-500/20 text-amber-300 px-3 py-1 rounded-lg border border-amber-500/30 font-mono">
-                                              Total Direção:{" "}
-                                              {directionTotalBudget.toLocaleString(
-                                                "pt-MZ",
-                                                {
-                                                  minimumFractionDigits: 2,
-                                                  maximumFractionDigits: 2,
-                                                },
-                                              )}{" "}
-                                              MZN
-                                            </span>
-                                            {(isBossOrAdmin ||
-                                              isPlanificacao) && (
-                                              <button
-                                                onClick={() => {
-                                                  if (
-                                                    confirm(
-                                                      `Renumerar todas as ${activities.length} atividades da direção ${direction}?`,
-                                                    )
-                                                  ) {
-                                                    reorderAndRenumber(
-                                                      activities,
-                                                    );
-                                                  }
-                                                }}
-                                                className="bg-white/10 hover:bg-white/20 text-white p-1.5 rounded-lg border border-white/20 shadow-sm transition-all"
-                                                title="Renumerar esta Direção"
-                                              >
-                                                <LayoutGrid size={12} />
-                                              </button>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </td>
-                                    </tr>
                                     {activities.map((act, idx) => (
                                       <ActivityTableRow
                                         key={act.id}
@@ -7472,60 +6758,12 @@ export default function PlanoWorkflowView({
                                         user={user}
                                         isBossOrAdmin={isBossOrAdmin}
                                         getActivityTotal={getActivityTotal}
-                                        actions={
-                                          <button
-                                            onClick={() => {
-                                              setEditingActivity(act);
-                                              setShowAddForm(true);
-                                            }}
-                                            className="text-blue-600 hover:text-blue-800 font-black uppercase text-[9px] tracking-tighter"
-                                          >
-                                            Editar
-                                          </button>
-                                        }
                                       />
                                     ))}
                                   </React.Fragment>
                                 );
                               })}
                             </tbody>
-                            <tfoot className="print:table-footer-group">
-                              <tr className="bg-slate-100 font-black border-t-2 border-slate-900">
-                                <td
-                                  colSpan={32}
-                                  className="p-4 text-right uppercase tracking-wider"
-                                >
-                                  TOTAL DE CONSOLIDADO
-                                </td>
-                                <td className="p-4 text-right text-base text-[#121c60]">
-                                  MZN{" "}
-                                  {filteredActivities
-                                    .filter(
-                                      (a) =>
-                                        (a.status as any) === "institucional",
-                                    )
-                                    .filter((a) => {
-                                      if (isChefeDPEP) return true;
-                                      if (directorDirection === "ALL")
-                                        return true;
-                                      if (!directorDirection) return true;
-                                      return (a.direcao || "")
-                                        .toUpperCase()
-                                        .includes(
-                                          directorDirection.toUpperCase(),
-                                        );
-                                    })
-                                    .reduce(
-                                      (sum, current) =>
-                                        sum + getActivityTotal(current),
-                                      0,
-                                    )
-                                    .toLocaleString("pt-MZ", {
-                                      minimumFractionDigits: 2,
-                                    })}
-                                </td>
-                              </tr>
-                            </tfoot>
                           </table>
                         </div>
 
@@ -7569,7 +6807,7 @@ export default function PlanoWorkflowView({
                     initialData={editingActivity || { ano: selectedYear }}
                     user={user}
                     readOnly={
-                      editingActivity ? !canEdit(editingActivity) : false
+                      isPlanificacao || (editingActivity ? !canEdit(editingActivity) : false)
                     }
                     onSubmit={async (data) => {
                       const totalValue =
@@ -8278,8 +7516,8 @@ export default function PlanoWorkflowView({
                   </div>
                   <div className="p-6 space-y-4">
                     <p className="text-xs text-slate-500 font-medium">
-                      Tem a certeza de que deseja remover permanentemente esta
-                      atividade?
+                      (Tem a certeza que pretende excluir a atividade? Se sim, prossiga, se não aborta)
+                      
                     </p>
                     <div className="flex gap-3">
                       <button
@@ -8504,6 +7742,90 @@ export default function PlanoWorkflowView({
             </AnimatePresence>
           </div>
         )}
+        {/* Sticky Selection Toolbar */}
+        <AnimatePresence>
+          {selectedActivityIds.length > 0 && (
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-slate-900/95 backdrop-blur-md text-white px-8 py-4 rounded-[2.5rem] shadow-2xl border border-slate-700/50 flex items-center gap-8 min-w-[500px] print:hidden"
+            >
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">
+                  Seleção Ativa
+                </span>
+                <span className="text-sm font-black whitespace-nowrap">
+                  {selectedActivityIds.length} {selectedActivityIds.length === 1 ? 'Atividade Selecionada' : 'Atividades Selecionadas'}
+                </span>
+              </div>
+              
+              <div className="h-8 w-px bg-slate-700" />
+              
+              <div className="flex items-center gap-3">
+                {selectedActivityIds.length === 1 && (
+                  <button
+                    onClick={() => {
+                      const act = rawActivities.find(a => a.id === selectedActivityIds[0]);
+                      if (act) {
+                        setEditingActivity(act);
+                        setShowAddForm(true);
+                      }
+                    }}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-xs transition-all shadow-lg shadow-blue-900/20 cursor-pointer"
+                  >
+                    <Edit2 size={14} /> EDITAR
+                  </button>
+                )}
+                
+                <button
+                  onClick={handleBatchDelete}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs transition-all shadow-lg shadow-rose-900/20 cursor-pointer"
+                >
+                  <Trash2 size={14} /> EXCLUIR
+                </button>
+
+                <button
+                  onClick={() => setSelectedActivityIds([])}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl font-black text-xs transition-all cursor-pointer"
+                >
+                  <X size={14} /> CANCELAR
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+      {showBatchDeleteConfirm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-100 flex flex-col animate-scale-up">
+            <div className="p-6 border-b border-slate-100 bg-slate-50">
+              <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                Confirmar Exclusão
+              </h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-500 font-medium">
+                (Tem a certeza que pretende excluir a atividade? Se sim, prossiga, se não aborta)
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowBatchDeleteConfirm(false)}
+                  className="flex-1 px-4 py-2 bg-white text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-xl border border-slate-200 hover:bg-slate-100 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmBatchDelete}
+                  className="flex-1 px-4 py-2 bg-rose-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-rose-700 transition-all"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </ActivitySelectionContext.Provider>
   );

@@ -16,7 +16,6 @@ import { PRIORIDADES, FONTES_RECEITA } from "../../../constants/formOptions";
 export const ActivityTableRow = React.memo(function ActivityTableRow({
   activity,
   getActivityTotal,
-  actions,
   onUpdateExecution,
   onUpdateRelatorio,
   onUpdateApproval,
@@ -29,7 +28,6 @@ export const ActivityTableRow = React.memo(function ActivityTableRow({
 }: {
   activity: any;
   getActivityTotal: (act: any) => number;
-  actions: React.ReactNode;
   onUpdateExecution?: (id: string, status: string) => void;
   onUpdateRelatorio?: (id: string, relatorio: string) => void;
   onUpdateApproval?: (id: string, approvalStatus: string) => void;
@@ -102,28 +100,13 @@ export const ActivityTableRow = React.memo(function ActivityTableRow({
         return (
           <tr
             key={`${activity.id || index}-${rIdx}`}
-            className={`hover:bg-[#dbe5f1] transition-colors ${activity.submetido ? "bg-[#f2f2f2] text-slate-500" : "bg-[#eff3f8]"} ${rowBorderClasses}`}
+            className={`hover:bg-[#dbe5f1] transition-all cursor-pointer ${isSelected ? "bg-blue-100/80 ring-1 ring-inset ring-blue-200" : activity.submetido ? "bg-[#f2f2f2] text-slate-500" : "bg-[#eff3f8]"} ${rowBorderClasses}`}
+            onClick={() => onToggleSelect?.(activity.id)}
           >
-            {/* Checkbox */}
-            <td
-              className="p-1 text-center border-r border-slate-300 bg-white w-8"
-              rowSpan={rubricas.length}
-              hidden={rIdx > 0}
-            >
-              <input
-                type="checkbox"
-                checked={Boolean(isSelected)}
-                onChange={() => onToggleSelect?.(activity.id)}
-                readOnly={!onToggleSelect}
-                disabled={!onToggleSelect}
-                className="cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-              />
-            </td>
             {/* Nº */}
             <td
-              className="p-1 text-center font-bold border-r border-slate-300 text-slate-900 bg-[#c6d9f1] cursor-pointer hover:bg-[#b8cdf0] transition-colors group relative w-10 text-xs"
-              onClick={() => onToggleSelect?.(activity.id)}
-              title="Clique para selecionar esta atividade e todas as suas necessidades"
+              className={`p-1 text-center font-bold border-r border-slate-300 transition-colors group relative w-10 text-xs ${isSelected ? "bg-blue-600 text-white" : "bg-[#c6d9f1] text-slate-900"}`}
+              title="Clique para selecionar esta atividade"
               rowSpan={rubricas.length}
               hidden={rIdx > 0}
             >
@@ -284,7 +267,10 @@ export const ActivityTableRow = React.memo(function ActivityTableRow({
             </td>
             <td
               className="p-2 border-r border-slate-300 text-[10px] font-black text-slate-900 max-w-[200px] whitespace-normal leading-tight cursor-pointer hover:bg-blue-50/50 transition-colors"
-              onClick={() => setShowOptionsModal(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowOptionsModal(true);
+              }}
               title="Clique sobre a atividade para gerir Opções (Aprovada / Reconduzida para ano+1)"
               rowSpan={rubricas.length}
               hidden={rIdx > 0}

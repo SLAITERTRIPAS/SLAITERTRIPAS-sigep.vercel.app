@@ -62,7 +62,12 @@ export const intelligentDiagnostics = {
           const title = act.nomeAtividade || act.designacao || act.title || "";
           const dir = act.direcao || act.unidadeOrganica || "Geral / Unidade Orgânica";
           const dept = act.departamento || "Geral";
-          const key = `${normalize(title)}|${normalize(dir)}|${normalize(dept)}`;
+          
+          // Excluir do agrupamento de duplicadas as atividades do departamento de património
+          const deptNorm = normalize(dept);
+          if (deptNorm.includes("patrimonio")) return;
+
+          const key = `${normalize(title)}|${normalize(dir)}|${deptNorm}`;
           if (!seen.has(key)) seen.set(key, []);
           seen.get(key)!.push(act);
         });
@@ -127,14 +132,34 @@ export const intelligentDiagnostics = {
 
           anomalies.push({
             id: "diag_patrimonio_activities",
-            title: "Atividades no Departamento de Património",
-            description: `Detetada(s) ${patrimonioActs.length} atividade(s) registada(s) no Departamento de Património:\n${patDetails}`,
+            title: "Atividades no Departamento de Património (Diferenciação por Letra)",
+            description: `Detetada(s) ${patrimonioActs.length} atividade(s) no Departamento de Património com designações idênticas:\n${patDetails}`,
+            category: "Matriz & POA",
+            severity: "warning",
+            autoFixable: true,
+            affectedCount: patrimonioActs.length,
+            fixActionKey: "differentiate_patrimonio_activities",
+            recommendation: "Método de solução: Acrescentar uma letra identificadora a cada atividade do Departamento de Património para diferenciá-las definitivamente, sem eliminar nenhuma.",
+          });
+        }
+
+        // Detectar Atividades Vazias
+        const emptyActivities = activities.filter((act: any) => {
+          const title = String(act.nomeAtividade || act.designacao || act.title || "").trim();
+          return title === "" || title === "-";
+        });
+
+        if (emptyActivities.length > 0) {
+          anomalies.push({
+            id: "diag_empty_activities",
+            title: "Atividades Vazias ou Sem Designação",
+            description: `Detetadas ${emptyActivities.length} atividades vazias que não possuem designação (em branco ou "-"). Estas linhas criam tabelas vazias indesejadas na planificação.`,
             category: "Matriz & POA",
             severity: "critical",
             autoFixable: true,
-            affectedCount: patrimonioActs.length,
-            fixActionKey: "fix_duplicate_activities",
-            recommendation: "Método de solução: Eliminar as atividades do Departamento de Património e recalcular a numeração de todos os departamentos a começar em 001.",
+            affectedCount: emptyActivities.length,
+            fixActionKey: "delete_empty_activities",
+            recommendation: "Método de solução: Eliminar definitivamente da base de dados Firestore todos os registos de atividades vazias.",
           });
         }
 
@@ -344,6 +369,71 @@ export const intelligentDiagnostics = {
    */
   async resolveAnomaly(fixActionKey: string): Promise<{ success: boolean; message: string }> {
     try {
+      if (fixActionKey === "delete_empty_activities") {
+        const snap = await getDocs(collection(db, "matrix_activities"));
+        const batch = writeBatch(db);
+        let deletedCount = 0;
+
+        snap.docs.forEach((docSnap) => {
+          const act = docSnap.data();
+          const title = String(act.nomeAtividade || act.designacao || act.title || "").trim();
+          if (title === "" || title === "-") {
+            batch.delete(doc(db, "matrix_activities", docSnap.id));
+            deletedCount++;
+          }
+        });
+
+        if (deletedCount > 0) {
+          await batch.commit();
+        }
+
+        return {
+          success: true,
+          message: `Sucesso! Foram eliminados definitivamente da base de dados ${deletedCount} registos de atividades vazias.`,
+        };
+      }
+
+      if (fixActionKey === "differentiate_patrimonio_activities") {
+        const snap = await getDocs(collection(db, "matrix_activities"));
+        const batch = writeBatch(db);
+        let updatedCount = 0;
+
+        const patrimonioActs: any[] = [];
+        snap.docs.forEach((docSnap) => {
+          const act = docSnap.data();
+          const deptStr = String(act.departamento || act.reparticao || act.unidadeOrganica || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          if (deptStr.includes("patrimonio")) {
+            patrimonioActs.push({ id: docSnap.id, ...act });
+          }
+        });
+
+        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        patrimonioActs.forEach((act, idx) => {
+          const currentName = String(act.nomeAtividade || act.title || act.designacao || "Atividade").trim();
+          const hasSuffix = /\([A-Z]\)$/.test(currentName);
+          if (!hasSuffix) {
+            const suffix = ` (${alphabet[idx % alphabet.length]})`;
+            const newName = currentName + suffix;
+            batch.update(doc(db, "matrix_activities", act.id), {
+              nomeAtividade: newName,
+              title: newName,
+              designacao: newName,
+              updatedAt: serverTimestamp(),
+            });
+            updatedCount++;
+          }
+        });
+
+        if (updatedCount > 0) {
+          await batch.commit();
+        }
+
+        return {
+          success: true,
+          message: `Diferenciadas com sucesso ${updatedCount} atividades do Departamento de Património com atribuição de letras identificadoras.`,
+        };
+      }
+
       if (fixActionKey === "fix_duplicate_activities" || fixActionKey === "fix_activity_numbering") {
         const res = await databaseMaintenance.removeDuplicateActivitiesAndFixNumbering();
         return {

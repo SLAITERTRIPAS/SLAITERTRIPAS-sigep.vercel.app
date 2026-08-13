@@ -60,6 +60,7 @@ export const InstitutionalHeader = ({
   isPlanificacaoHeader,
   unidadeName,
   title = "PLANO DE ATIVIDADE",
+  isRecomendado,
 }: {
   direcaoName?: string;
   departamentoName?: string;
@@ -68,6 +69,7 @@ export const InstitutionalHeader = ({
   year: number;
   isOwner?: boolean;
   isPlanificacaoHeader?: boolean;
+  isRecomendado?: boolean;
   unidadeName?: string;
   title?: string;
 }) => {
@@ -165,9 +167,9 @@ export const InstitutionalHeader = ({
         )}
       </div>
 
-      {/* 5. Título do Plano (EM VERMELHO) */}
-      <h5 className="text-[1.4rem] font-black text-red-600 uppercase mt-2 tracking-tight">
-        {displayTitle}
+      {/* 5. Título do Plano (EM VERMELHO ou AZUL para RECOMENDADO) */}
+      <h5 className={`text-[1.4rem] font-black ${isRecomendado ? 'text-blue-600' : 'text-red-600'} uppercase mt-2 tracking-tight`}>
+        {isRecomendado ? displayTitle.replace("PLANO DE ATIVIDADE", "PLANO INSTITUCIONAL RECOMENDADO") : displayTitle}
       </h5>
 
       {/* 6. Linha Divisória */}

@@ -62,6 +62,7 @@ import {
   doc,
   updateDoc,
   serverTimestamp,
+  onSnapshot,
 } from "firebase/firestore";
 import { auth, db } from "./lib/firebase";
 
@@ -179,6 +180,44 @@ export default function App() {
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [backupAlert, setBackupAlert] = useState<{ message: string; type: string } | null>(null);
+
+  // Monitorização em tempo real de Sessão Única (Desconecta automaticamente se a conta for iniciada noutro dispositivo)
+  useEffect(() => {
+    if (!user || !user.id || user.isAnonymous) return;
+
+    let localSessionId = localStorage.getItem("sigep_active_session_id");
+    if (!localSessionId) {
+      localSessionId = "sess_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
+      localStorage.setItem("sigep_active_session_id", localSessionId);
+      updateDoc(doc(db, "users", user.id), {
+        activeSessionId: localSessionId,
+        lastLoginAt: new Date().toISOString(),
+      }).catch(console.warn);
+    }
+
+    const unsub = onSnapshot(
+      doc(db, "users", user.id),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          const serverSessionId = data.activeSessionId;
+
+          // Se existe um token de sessão no servidor e ele não coincide com este dispositivo/aba
+          if (serverSessionId && serverSessionId !== localSessionId) {
+            alert(
+              "A sua sessão foi encerrada porque a sua conta foi iniciada noutro dispositivo.",
+            );
+            handleLogout();
+          }
+        }
+      },
+      (err) => {
+        console.warn("Aviso na verificação de sessão única:", err);
+      }
+    );
+
+    return () => unsub();
+  }, [user?.id]);
 
   // Sistema de Backup Automático de 12 horas e Alertas de Progresso
   useEffect(() => {
@@ -959,6 +998,8 @@ export default function App() {
       }
     }
 
+    localStorage.removeItem("sigep_logged_in_user");
+    localStorage.removeItem("sigep_active_session_id");
     setUser(null);
     localStorage.removeItem("sigep_current_view");
     setSubMenuStack([]);
