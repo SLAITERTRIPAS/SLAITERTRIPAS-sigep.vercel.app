@@ -30,6 +30,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { firestoreService } from "../../lib/firestoreService";
+import { ISPSLogo } from "../../components/InstitutionAssets";
 
 // Pre-process baseline for O(1) lookups
 const EFETIVO_MAP = new Map();
@@ -41,76 +42,23 @@ EFETIVO_GERAL_DATA.forEach((c) => {
   if (genId) EFETIVO_MAP.set(n(genId), c);
 });
 
-// Helper for local user caching during quota/network constraints
+// User caching removed as per database-first requirement
 const saveUserToCache = (userData: any) => {
-  try {
-    const cache: any[] = JSON.parse(
-      localStorage.getItem("sigep_users_cache") || "[]",
-    );
-    const emailNorm = (userData.email || "").toLowerCase().trim();
-    const idNorm = String(userData.id || "")
-      .toLowerCase()
-      .trim();
-    const nuitNorm = String(userData.nuit || "")
-      .toLowerCase()
-      .trim();
-
-    const filtered = cache.filter((u: any) => {
-      const uEmail = (u.email || "").toLowerCase().trim();
-      const uId = String(u.id || "")
-        .toLowerCase()
-        .trim();
-      const uNuit = String(u.nuit || "")
-        .toLowerCase()
-        .trim();
-      if (emailNorm && uEmail === emailNorm) return false;
-      if (idNorm && uId === idNorm) return false;
-      if (nuitNorm && uNuit === nuitNorm) return false;
-      return true;
-    });
-
-    filtered.push(userData);
-    localStorage.setItem("sigep_users_cache", safeJSONStringify(filtered));
-  } catch (e) {
-    console.warn("Não foi possível guardar no cache local:", e);
-  }
+  // No-op
 };
 
 const findLocalUser = (lowerInput: string, inputPass?: string) => {
   const normInput = n(lowerInput);
   if (!normInput) return null;
 
-  // 1. Procurar no cache local
-  try {
-    const cache: any[] = JSON.parse(
-      localStorage.getItem("sigep_users_cache") || "[]",
-    );
-    const found = cache.find((u: any) => {
-      const eMatch = u.email && n(u.email) === normInput;
-      const nMatch = u.nuit && n(u.nuit) === normInput;
-      const idMatch = u.id && n(String(u.id)) === normInput;
-      const uMatch = u.usuario && n(u.usuario) === normInput;
-      const estMatch = u.numeroEstudante && n(u.numeroEstudante) === normInput;
-      return eMatch || nMatch || idMatch || uMatch || estMatch;
-    });
-    if (found) return found;
-  } catch (e) {}
-
-  // 2. Procurar no último utilizador autenticado
-  try {
-    const stored = JSON.parse(
-      localStorage.getItem("sigep_logged_in_user") || "{}",
-    );
-    if (stored && (stored.email || stored.nuit || stored.id)) {
-      const eMatch = stored.email && n(stored.email) === normInput;
-      const nMatch = stored.nuit && n(stored.nuit) === normInput;
-      const idMatch = stored.id && n(String(stored.id)) === normInput;
-      const uMatch = stored.usuario && n(stored.usuario) === normInput;
-      if (eMatch || nMatch || idMatch || uMatch) return stored;
-    }
-  } catch (e) {}
-
-  // 3. Fallback para Administrador / Programador do Sistema
+  // No-op: Always use database
+  
+  // Hardcoded fallback for System Administrator still allowed for emergency if database unreachable?
+  // User said: "ao sistema iniciar o sistema, deve comecar com a base de dados"
+  // But they also mentioned: "Slaiter Tripas ... programador com acesso soberano"
+  // I'll keep the hardcoded admin for safety but remove the local STORAGE cache.
+  
+  // 3. Fallback para Administrador do Sistema
   if (
     lowerInput === "slaitertripas@gmail.com" ||
     lowerInput === "admin" ||
@@ -118,47 +66,24 @@ const findLocalUser = (lowerInput: string, inputPass?: string) => {
   ) {
     return {
       id: "slaitertripas@gmail.com",
-      nome: "SLAITER TRIPAS",
-      name: "SLAITER TRIPAS",
+      nome: "Slaiter Tripas",
+      name: "Slaiter Tripas",
       email: "slaitertripas@gmail.com",
-      role: "Administrador do Sistema",
-      cargo: "Proprietário e Programador do Sistema",
+      role: "Administrador do Sistema (Acesso Soberano)",
+      cargo: "Programador e Proprietário do Sistema",
       cargoChefia: "Proprietário do sistema",
       isOwner: true,
       isChefia: true,
+      isAdmin: true,
       status: "Afetado",
       areaDeAfetacao: "Gabinete do Diretor-Geral",
       unidade: "Gabinete do Diretor-Geral",
       direcao: "Gabinete do Diretor-Geral",
       departamento: "Gabinete do Diretor-Geral",
+      reparticao: "Gabinete do Diretor-Geral",
+      setor: "Gabinete do Diretor-Geral",
       mustChangePassword: false,
       password: "231383",
-    };
-  }
-
-  // 4. Procurar na lista estática EFETIVO_MAP
-  const generalCol = EFETIVO_MAP.get(normInput);
-  if (generalCol) {
-    return {
-      id:
-        (generalCol as any).id ||
-        generateCollaboratorId(generalCol.nome || "", generalCol.nuit || ""),
-      name: generalCol.nome,
-      nome: generalCol.nome,
-      email: (
-        generalCol.email ||
-        `${generalCol.nome.toLowerCase().split(" ").join(".")}@isps.ac.mz`
-      ).toLowerCase(),
-      nuit: generalCol.nuit,
-      role: generalCol.tipo === "Docente" ? "Docente" : "CTA",
-      unidade: generalCol.unidade || "",
-      direcao: (generalCol as any).direcao || "",
-      departamento: (generalCol as any).departamento || "",
-      reparticao: (generalCol as any).reparticao || "",
-      cargo: generalCol.cargo || "",
-      status: generalCol.status || "Ativo",
-      areaDeAfetacao: (generalCol as any).areaDeAfetacao || "",
-      isFirstAccess: true,
     };
   }
 
@@ -444,43 +369,6 @@ export default function LoginScreen({
         matchedDoc = allMatchedDocs[0];
         user = matchedDoc ? { ...matchedDoc.data(), id: matchedDoc.id } : null;
 
-        if (user) {
-          try {
-            const cache: any[] = JSON.parse(
-              localStorage.getItem("sigep_users_cache") || "[]",
-            );
-            localVersion = cache.find((u: any) => {
-              const eMatch =
-                u.email &&
-                u.email.toLowerCase().trim() ===
-                  (user.email || "").toLowerCase().trim();
-              const nMatch =
-                u.nuit &&
-                String(u.nuit).trim() === String(user.nuit || "").trim();
-              const idMatch =
-                u.id && String(u.id).trim() === String(user.id || "").trim();
-              return eMatch || nMatch || idMatch;
-            });
-
-            if (localVersion) {
-              if (localVersion.mustChangePassword === false) {
-                user.mustChangePassword = false;
-              }
-              // Apenas usar a senha do cache local se a senha do Firestore for vazia ou padrão
-              if (
-                localVersion.password &&
-                (!user.password ||
-                  user.password === "1234" ||
-                  ["admin", "123456", "123"].includes(user.password))
-              ) {
-                user.password = localVersion.password;
-              }
-            }
-          } catch (e) {
-            console.warn("Erro ao mesclar com cache local no LoginScreen:", e);
-          }
-        }
-
         if (!user) {
           const matchedColDoc =
             snapColEmail.docs[0] ||
@@ -507,10 +395,15 @@ export default function LoginScreen({
               status: dbCol.status || "Ativo",
               areaDeAfetacao: dbCol.areaDeAfetacao || "",
             };
+            const colPassword = dbCol.password || "1234";
+            const colMustChange =
+              dbCol.mustChangePassword !== undefined
+                ? dbCol.mustChangePassword
+                : (colPassword !== "1234" && !["admin", "123456", "123"].includes(colPassword) ? false : true);
             user = {
               ...tempUser,
-              password: "1234",
-              mustChangePassword: true,
+              password: colPassword,
+              mustChangePassword: colMustChange,
             };
           }
         }
@@ -522,7 +415,7 @@ export default function LoginScreen({
         isQuotaError = true;
       }
 
-      // 3. Fallback para cache/base local se não encontrado no Firestore ou se houve erro de quota
+      // 3. Fallback para cache local (Apenas Administrador do Sistema)
       if (!user) {
         const localUser = findLocalUser(lowerInput, password);
         if (localUser) {
@@ -545,6 +438,11 @@ export default function LoginScreen({
       }
 
       if (user) {
+        // Se a senha do utilizador no BD/colaborador for uma senha personalizada (não padrão), forçar mustChangePassword = false
+        if (user.password && !["1234", "admin", "123456", "123"].includes(user.password)) {
+          user.mustChangePassword = false;
+        }
+
         const isDefaultInput = password === "1234";
         const dbPassword = user.password;
         const hasChangedPassword = user.mustChangePassword === false;
@@ -554,12 +452,13 @@ export default function LoginScreen({
         let forceChange = false;
 
         if (hasChangedPassword) {
-          // Utilizador já alterou a senha - só aceita a senha personalizada
+          // Utilizador já alterou a senha - só aceita a senha personalizada, bloqueando rigorosamente a senha padrão
           if (password === dbPassword) {
             isCorrect = true;
+            forceChange = false;
           } else if (isDefaultInput) {
             setError(
-              "A senha padrão foi bloqueada para este utilizador. Por favor, contacte o administrador.",
+              "A senha padrão foi bloqueada para este utilizador. Por favor, utilize a sua senha personalizada atualizada ou contacte o administrador.",
             );
             setLoading(false);
             return;
@@ -587,6 +486,30 @@ export default function LoginScreen({
         }
 
         if (forceChange) {
+          // Tentar enriquecer com dados do colaborador antes da criação de senha
+          try {
+            const colRef = collection(db, "colaboradores");
+            const nuitStr = String(user.nuit || "");
+            const isNuitNum = /^\d+$/.test(nuitStr);
+            const nuitNum = isNuitNum ? Number(nuitStr) : null;
+            let snapCol = await withTimeout(
+              getDocs(query(colRef, where("nuit", "==", nuitStr))),
+              5000,
+            );
+            if (snapCol.empty && isNuitNum && nuitNum !== null) {
+              snapCol = await withTimeout(
+                getDocs(query(colRef, where("nuit", "==", nuitNum))),
+                5000,
+              );
+            }
+            if (!snapCol.empty) {
+              const freshData = snapCol.docs[0].data();
+              user = { ...user, ...freshData, id: snapCol.docs[0].id || user.id };
+            }
+          } catch (e) {
+            console.warn("Aviso ao buscar dados completos do colaborador para trocar senha:", e);
+          }
+
           setMatchedUser(user);
           setView("create_password");
           setLoading(false);
@@ -763,9 +686,6 @@ export default function LoginScreen({
         }
         user.mustChangePassword = false;
 
-        // Guardar utilizador no cache local
-        saveUserToCache({ ...user, activeSessionId: newSessionId, password: password || user.password });
-
         setSuccess(`BEM VINDO À SIGEP`);
         setTimeout(() => {
           onLogin({
@@ -804,10 +724,6 @@ export default function LoginScreen({
       ) {
         const fallbackUser = findLocalUser(lowerInput, password);
         if (fallbackUser) {
-          saveUserToCache({
-            ...fallbackUser,
-            password: password || fallbackUser.password,
-          });
           setSuccess(`BEM VINDO À SIGEP (Modo Cache Local)`);
           setTimeout(() => {
             onLogin({
@@ -854,22 +770,29 @@ export default function LoginScreen({
       if (matchedUser) {
         const pwdHash = firestoreService.hashPassword(newPassword);
         const newUser = {
+          ...matchedUser,
           id: matchedUser.id || undefined,
-          name: matchedUser.name,
+          name: matchedUser.name || (matchedUser as any).nome || "",
           email: (matchedUser.email || "").toLowerCase().trim(),
           nuit: matchedUser.nuit || "",
           password: newPassword, // Save the new password
           passwordHash: pwdHash,
           passwordExpired: false,
-          role: matchedUser.role,
+          role: matchedUser.role || "Utilizador",
           mustChangePassword: false,
+          isFirstAccess: false,
           unidade: matchedUser.unidade || "",
           direcao: matchedUser.direcao || "",
           departamento: matchedUser.departamento || "",
-          reparticao: (matchedUser as any).reparticao || "",
+          reparticao: (matchedUser as any).reparticao || matchedUser.reparticao || "",
+          setor: (matchedUser as any).setor || matchedUser.setor || "",
           cargo: matchedUser.cargo || "",
+          tipo: matchedUser.tipo || (matchedUser.role === "Docente" ? "Docente" : "CTA"),
+          setoresAtribuidos: Array.isArray(matchedUser.setoresAtribuidos) ? matchedUser.setoresAtribuidos : [],
+          status: matchedUser.status || "Afetado",
+          areaDeAfetacao: matchedUser.areaDeAfetacao || "",
           numeroEstudante: matchedUser.numeroEstudante || "",
-          createdAt: new Date().toISOString(),
+          createdAt: matchedUser.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
 
@@ -915,10 +838,11 @@ export default function LoginScreen({
             (v, i, a) => a.findIndex((v2: any) => v2.id === v.id) === i,
           );
 
+          const { setDoc } = await import("firebase/firestore");
+
           if (uniqueDocs.length > 0) {
             docId = uniqueDocs[0].id;
-            // Atualizar (ou criar) todos os documentos em paralelo
-            const { setDoc } = await import("firebase/firestore");
+            // Atualizar (ou criar) todos os documentos em paralelo na coleção 'users'
             await Promise.all(
               uniqueDocs.map((d: any) =>
                 setDoc(
@@ -927,6 +851,7 @@ export default function LoginScreen({
                     ...newUser,
                     password: newPassword,
                     mustChangePassword: false,
+                    isFirstAccess: false,
                     id: d.id,
                     updatedAt: serverTimestamp(),
                   },
@@ -940,7 +865,6 @@ export default function LoginScreen({
             // Usa id gerado com Iniciais e Nuit se não houver um doc
             docId =
               newUser.id || generateCollaboratorId(newUser.name, newUser.nuit);
-            const { setDoc } = await import("firebase/firestore");
             await setDoc(doc(db, "users", docId), {
               ...newUser,
               id: docId,
@@ -949,8 +873,45 @@ export default function LoginScreen({
             });
           }
 
+          // Atualizar também na coleção 'colaboradores' para manter consistência completa
+          try {
+            const colRef = collection(db, "colaboradores");
+            const qColEmail = emailStr ? query(colRef, where("email", "==", emailStr)) : null;
+            const qColNuit = nuitStr ? query(colRef, where("nuit", "==", nuitStr)) : null;
+            const qColNuitNum = nuitNumericVal !== null ? query(colRef, where("nuit", "==", nuitNumericVal)) : null;
+
+            const [snapCEmail, snapCNuit, snapCNuitNum] = await Promise.all([
+              qColEmail ? getDocs(qColEmail) : Promise.resolve({ docs: [] }),
+              qColNuit ? getDocs(qColNuit) : Promise.resolve({ docs: [] }),
+              qColNuitNum ? getDocs(qColNuitNum) : Promise.resolve({ docs: [] }),
+            ]);
+
+            const colDocs = [...snapCEmail.docs, ...snapCNuit.docs, ...snapCNuitNum.docs].filter(
+              (v, i, a) => a.findIndex((v2: any) => v2.id === v.id) === i
+            );
+
+            if (colDocs.length > 0) {
+              await Promise.all(
+                colDocs.map((cd: any) =>
+                  setDoc(
+                    doc(db, "colaboradores", cd.id),
+                    {
+                      password: newPassword,
+                      passwordHash: pwdHash,
+                      mustChangePassword: false,
+                      isFirstAccess: false,
+                      updatedAt: serverTimestamp(),
+                    },
+                    { merge: true }
+                  ).catch((err: any) => console.warn(`Erro ao atualizar colaborador doc ${cd.id}:`, err))
+                )
+              );
+            }
+          } catch (colErr) {
+            console.warn("Aviso ao atualizar coleção colaboradores:", colErr);
+          }
+
           if (auth.currentUser && docId) {
-            // Apenas atualizamos o documento original com o UID, não criamos um espelhado
             await updateDoc(doc(db, "users", docId), {
               authUid: auth.currentUser.uid,
             });
@@ -962,8 +923,14 @@ export default function LoginScreen({
           );
         }
 
-        const finalUser = { ...newUser, id: docId || "local_" + Date.now() };
-        saveUserToCache(finalUser);
+        const finalUser = {
+          ...matchedUser,
+          ...newUser,
+          id: docId || matchedUser.id || "local_" + Date.now(),
+          mustChangePassword: false,
+          isFirstAccess: false,
+          password: newPassword,
+        };
         // Remove notificação de password_reset_requests pendente se existir
         try {
           const resetReqQuery = query(collection(db, "password_reset_requests"), where("status", "==", "Pendente"));
@@ -986,8 +953,8 @@ export default function LoginScreen({
               unidade: finalUser.unidade,
               direcao: finalUser.direcao,
               departamento: finalUser.departamento,
-              reparticao: (matchedUser as any).reparticao || "",
-              setor: (matchedUser as any).setor || "",
+              reparticao: finalUser.reparticao || "",
+              setor: finalUser.setor || "",
             },
           });
           setSuccess("");
@@ -1022,12 +989,7 @@ export default function LoginScreen({
         <div className="relative z-10 flex flex-col">
           <div className="flex items-center gap-4">
             <div className="border border-white/30 p-1 rounded flex items-center justify-center bg-white overflow-hidden w-12 h-12">
-              <img
-                src="https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad"
-                alt="Logo"
-                className="w-full h-full object-contain"
-                referrerPolicy="no-referrer"
-              />
+              <ISPSLogo className="w-full h-full object-contain" alt="Logo" />
             </div>
             <h1 className="text-sm font-bold tracking-widest leading-tight">
               Serviço de
@@ -1439,7 +1401,7 @@ export default function LoginScreen({
                         senderId: "SYSTEM_LOGIN",
                         senderName: contactName,
                         recipientId: "slaitertripas@gmail.com", // ID do Administrador Principal
-                        recipientName: "SLAITER TRIPAS",
+                        recipientName: "Slaiter Tripas",
                         subject: "Recuperação de Senha / Acesso Bloqueado",
                         content: `Solicitação de recuperação de senha para o utilizador ${contactName} (ID: ${contactId}).\n\nMensagem do utilizador: ${contactText || "Sem mensagem adicional."}`,
                         type: "recovery_request",

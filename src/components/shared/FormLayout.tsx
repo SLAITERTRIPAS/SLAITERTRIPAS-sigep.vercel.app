@@ -2,6 +2,8 @@ import React, { ReactNode } from "react";
 import { motion } from "motion/react";
 import { X, Printer, ShieldCheck, LucideIcon } from "lucide-react";
 import { InstitutionalHeader } from "../InstitutionalHeader";
+import { OfficialDocumentSignatures } from "../OfficialDocumentSignatures";
+import { DocumentToolbarActions } from "../DocumentToolbarActions";
 
 interface FormLayoutProps {
   title: string;
@@ -19,6 +21,8 @@ interface FormLayoutProps {
   iconColor?: string;
   maxWidth?: string;
   hidePrintHeader?: boolean;
+  hideSignatures?: boolean;
+  onImport?: (data: any, file: File) => void;
   user?: any;
 }
 
@@ -38,8 +42,16 @@ export const FormLayout: React.FC<FormLayoutProps> = ({
   iconColor = "text-amber-400",
   maxWidth = "max-w-4xl",
   hidePrintHeader = false,
+  hideSignatures = false,
+  onImport,
   user,
 }) => {
+  const isDPEP =
+    user?.departamento?.toUpperCase().includes("DPEP") ||
+    user?.direcao?.toUpperCase().includes("DPEP") ||
+    user?.setor?.toUpperCase().includes("PLANIFICA") ||
+    user?.reparticao?.toUpperCase().includes("PLANIFICA");
+
   return (
     <div className="relative">
       {/* Success Overlay */}
@@ -86,7 +98,7 @@ export const FormLayout: React.FC<FormLayoutProps> = ({
         className={`${maxWidth} mx-auto bg-white shadow-2xl rounded-3xl overflow-hidden border border-slate-200 print:shadow-none print:border-none print:overflow-visible print:h-auto print:max-w-full`}
       >
         {!hidePrintHeader && (
-          <div className="hidden print:block mb-6">
+          <div className="hidden print:block mb-6 p-4">
             <InstitutionalHeader 
               unidadeName={user?.unidadeOrganica || "UNIDADE ORGÂNICA"}
               direcaoName={user?.direcao || "DIRECÇÃO GERAL"}
@@ -100,7 +112,7 @@ export const FormLayout: React.FC<FormLayoutProps> = ({
         )}
 
         <div
-          className={`${bannerColor} p-8 text-white flex justify-between items-center relative overflow-hidden print:hidden`}
+          className={`${bannerColor} p-8 text-white flex flex-wrap justify-between items-center gap-4 relative overflow-hidden print:hidden`}
         >
           <div className="flex items-center gap-4 relative z-10">
             <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-md">
@@ -114,30 +126,42 @@ export const FormLayout: React.FC<FormLayoutProps> = ({
             </div>
           </div>
 
-          {trackingCode && (
-            <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/10 backdrop-blur-md mr-4 relative z-10">
-              <div className="text-[9px] font-black text-slate-300 tracking-widest leading-tight">
-                Rastreio Interno
+          <div className="flex items-center gap-3 relative z-10">
+            {trackingCode && (
+              <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/10 backdrop-blur-md">
+                <div className="text-[9px] font-black text-slate-300 tracking-widest leading-tight">
+                  Rastreio Interno
+                </div>
+                <div className="text-sm font-mono font-black text-white leading-tight">
+                  {trackingCode}
+                </div>
               </div>
-              <div className="text-sm font-mono font-black text-white leading-tight">
-                {trackingCode}
-              </div>
-            </div>
-          )}
+            )}
 
-          <div className="flex gap-3 print:hidden relative z-10">
-            <button
-              onClick={() => window.print()}
-              className="p-3 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
-              type="button"
-            >
-              <Printer size={18} />
-            </button>
+            {/* Ações Padronizadas: IMPRIMIR / IMPORTAR */}
+            <DocumentToolbarActions
+              title={title}
+              onPrint={() => window.print()}
+              onImport={onImport}
+              showExport={false}
+            />
           </div>
         </div>
 
         <form onSubmit={onSubmit} className="p-8 space-y-8">
           {children}
+
+          {/* Assinaturas Oficiais Padronizadas em todos os documentos */}
+          {!hideSignatures && (
+            <div className="pt-6">
+              <OfficialDocumentSignatures
+                isDPEP={isDPEP}
+                user={user}
+                editable={true}
+                date={new Date().toLocaleDateString("pt-MZ")}
+              />
+            </div>
+          )}
         </form>
       </motion.div>
     </div>

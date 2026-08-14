@@ -150,7 +150,7 @@ export default function MainMenu({
               visible: menuItems[1]?.visible,
             },
             {
-              title: "Unidade Orgânica",
+              title: "Serviços Centrais",
               icon: Briefcase,
               color: "bg-[#4b5563]",
               items: menuItems[2]?.items,

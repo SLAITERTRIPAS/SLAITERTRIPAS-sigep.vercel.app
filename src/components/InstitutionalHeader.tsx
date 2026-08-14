@@ -1,4 +1,5 @@
 import React from 'react';
+import { ISPSLogo } from './InstitutionAssets';
 
 export function resolveOrgaoName(unidadeName?: string, direcaoName?: string): string {
   if (unidadeName && unidadeName.trim() && unidadeName !== "UNIDADE ORGÂNICA") {
@@ -50,6 +51,8 @@ export function resolveOrgaoName(unidadeName?: string, direcaoName?: string): st
   return (unidadeName || "UNIDADE ORGÂNICA").toUpperCase();
 }
 
+export type PlanLevelType = "institucional" | "direcao" | "departamento" | "reparticao" | "setor";
+
 export const InstitutionalHeader = ({
   direcaoName,
   departamentoName,
@@ -59,7 +62,8 @@ export const InstitutionalHeader = ({
   isOwner,
   isPlanificacaoHeader,
   unidadeName,
-  title = "PLANO DE ATIVIDADE",
+  title,
+  planLevel,
   isRecomendado,
 }: {
   direcaoName?: string;
@@ -72,6 +76,7 @@ export const InstitutionalHeader = ({
   isRecomendado?: boolean;
   unidadeName?: string;
   title?: string;
+  planLevel?: PlanLevelType;
 }) => {
   // Garantir que os nomes estão em maiúsculas e resolver o Órgão correto
   const displayUnidade = resolveOrgaoName(unidadeName, direcaoName);
@@ -80,46 +85,55 @@ export const InstitutionalHeader = ({
   const displayReparticao = (reparticaoName || "").toUpperCase().trim();
   const displaySector = (sectorName || "").toUpperCase().trim();
 
-  // Nível ativo mais específico para compor o título dinâmico em tempo real
-  let lowestLevelName = "";
-  if (displaySector) {
-    lowestLevelName = displaySector.startsWith("SETOR") ? displaySector : `SETOR DE ${displaySector}`;
-  } else if (displayReparticao) {
-    lowestLevelName = displayReparticao.startsWith("REPARTIÇÃO") || displayReparticao.startsWith("REPARTICAO")
-      ? displayReparticao
-      : `REPARTIÇÃO DE ${displayReparticao}`;
-  } else if (displayDepartamento) {
-    lowestLevelName = displayDepartamento;
-  } else if (displayDirecao) {
-    lowestLevelName = displayDirecao;
-  } else {
-    lowestLevelName = displayUnidade;
+  // Determinar o nível de plano
+  let inferredLevel: PlanLevelType = planLevel || "institucional";
+  if (!planLevel) {
+    if (displaySector) inferredLevel = "setor";
+    else if (displayReparticao) inferredLevel = "reparticao";
+    else if (displayDepartamento) inferredLevel = "departamento";
+    else if (displayDirecao) inferredLevel = "direcao";
+    else inferredLevel = "institucional";
   }
 
-  // Título dinâmico em tempo real
-  let displayTitle = (title || "PLANO DE ATIVIDADE").toUpperCase().trim();
-  if (displayTitle === "PLANO DE ATIVIDADE" || displayTitle === "PLANO DE ATIVIDADES") {
-    if (lowestLevelName) {
-      displayTitle = `PLANO DE ATIVIDADE DE ${lowestLevelName}`;
-    }
-  } else if (
-    displayTitle.startsWith("PLANO DE ATIVIDADE DE ") ||
-    displayTitle.startsWith("PLANO DE ATIVIDADES DE ")
-  ) {
-    if (lowestLevelName && !displayTitle.includes(lowestLevelName)) {
-      displayTitle = `PLANO DE ATIVIDADE DE ${lowestLevelName}`;
+  // Título dinâmico rigoroso por nível
+  let displayTitle = "";
+  if (title) {
+    displayTitle = title.toUpperCase().trim();
+  } else {
+    switch (inferredLevel) {
+      case "institucional":
+        displayTitle = "PLANO INSTITUCIONAL DE ATIVIDADES";
+        break;
+      case "direcao":
+        displayTitle = displayDirecao 
+          ? (displayDirecao.startsWith("DIREÇÃO") ? `PLANO DE ATIVIDADE DA ${displayDirecao}` : `PLANO DE ATIVIDADE DA DIREÇÃO DE ${displayDirecao}`)
+          : "PLANO DE ATIVIDADE DA DIREÇÃO";
+        break;
+      case "departamento":
+        displayTitle = displayDepartamento
+          ? (displayDepartamento.startsWith("DEPARTAMENTO") ? `PLANO DE ATIVIDADE DO ${displayDepartamento}` : `PLANO DE ATIVIDADE DO DEPARTAMENTO DE ${displayDepartamento}`)
+          : "PLANO DE ATIVIDADE DO DEPARTAMENTO";
+        break;
+      case "reparticao":
+        displayTitle = displayReparticao
+          ? (displayReparticao.startsWith("REPARTIÇÃO") || displayReparticao.startsWith("REPARTICAO") ? `PLANO DE ATIVIDADE DA ${displayReparticao}` : `PLANO DE ATIVIDADE DA REPARTIÇÃO DE ${displayReparticao}`)
+          : "PLANO DE ATIVIDADE DA REPARTIÇÃO";
+        break;
+      case "setor":
+        displayTitle = displaySector
+          ? (displaySector.startsWith("SETOR") ? `PLANO DE ATIVIDADE DO ${displaySector}` : `PLANO DE ATIVIDADE DO SETOR DE ${displaySector}`)
+          : "PLANO DE ATIVIDADE DO SETOR";
+        break;
     }
   }
 
   return (
     <div className="text-center mb-6 flex flex-col items-center w-full bg-white p-8 rounded-t-[2.5rem]">
-      {/* 1. Logotipo */}
-      <div className="mb-6">
-        <img
-          src="https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad"
-          alt="Logo ISPS"
-          className="w-36 h-auto object-contain"
-          referrerPolicy="no-referrer"
+      {/* 1. Logótipo Oficial do ISPS */}
+      <div className="mb-5 flex items-center justify-center">
+        <ISPSLogo
+          className="w-36 h-auto max-h-24 object-contain drop-shadow-sm"
+          alt="Logótipo ISPS"
         />
       </div>
 
@@ -129,7 +143,7 @@ export const InstitutionalHeader = ({
       </h2>
 
       {/* 3. Província / Distrito */}
-      <div className="flex flex-col items-center gap-0.5 mb-6">
+      <div className="flex flex-col items-center gap-0.5 mb-5">
         <h3 className="text-base font-bold text-slate-700 uppercase tracking-[0.1em]">
           PROVÍNCIA DE TETE
         </h3>
@@ -138,29 +152,29 @@ export const InstitutionalHeader = ({
         </h3>
       </div>
       
-      {/* 4. Hierarquia Organizacional */}
-      <div className="flex flex-col items-center gap-1.5 mb-6">
+      {/* 4. Hierarquia Organizacional Independente */}
+      <div className="flex flex-col items-center gap-1.5 mb-5">
         {/* Órgão */}
         <h4 className="text-xl font-bold text-slate-900 uppercase tracking-tight">
           {displayUnidade}
         </h4>
 
-        {/* Direção */}
-        {displayDirecao && (
+        {/* Direção (se aplicável ao nível) */}
+        {displayDirecao && (inferredLevel !== "institucional" || displayDirecao !== "TODAS AS ÁREAS (GERAL)") && (
           <h4 className="text-xl font-bold text-slate-900 uppercase tracking-tight">
             {displayDirecao}
           </h4>
         )}
 
-        {/* Departamento */}
-        {displayDepartamento && (
+        {/* Departamento (se aplicável ao nível) */}
+        {displayDepartamento && (inferredLevel === "departamento" || inferredLevel === "reparticao" || inferredLevel === "setor") && (
           <h4 className="text-xl font-bold text-slate-900 uppercase tracking-tight">
             {displayDepartamento}
           </h4>
         )}
 
-        {/* Repartição / Setor */}
-        {(displayReparticao || displaySector) && (
+        {/* Repartição / Setor (se aplicável ao nível) */}
+        {(displayReparticao || displaySector) && (inferredLevel === "reparticao" || inferredLevel === "setor") && (
           <h4 className="text-xl font-bold text-slate-900 uppercase tracking-tight">
             {displayReparticao} {displayReparticao && displaySector ? "-" : ""} {displaySector}
           </h4>

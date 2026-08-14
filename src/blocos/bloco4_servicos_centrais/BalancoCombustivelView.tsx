@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { isSuperBossUser } from "../../lib/auth";
 import { printElementById } from "../../lib/printUtils";
+import { ISPSLogo } from "../../components/InstitutionAssets";
 
 export default function BalancoCombustivelView({
   user,
@@ -82,13 +83,8 @@ export default function BalancoCombustivelView({
           <div className="w-1/3 bg-red-600"></div>
         </div>
         <div className="text-center mb-10 border-b-2 border-slate-900 pb-10 relative">
-          <div className="w-32 h-32 mx-auto mb-6 bg-white overflow-hidden p-1">
-            <img
-              src="https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad"
-              alt="Logo ISPS"
-              className="w-full h-full object-contain"
-              referrerPolicy="no-referrer"
-            />
+          <div className="w-32 h-32 mx-auto mb-6 bg-white overflow-hidden p-1 flex items-center justify-center">
+            <ISPSLogo className="w-full h-full object-contain" alt="Logo ISPS" />
           </div>
 
           <div className="space-y-1">

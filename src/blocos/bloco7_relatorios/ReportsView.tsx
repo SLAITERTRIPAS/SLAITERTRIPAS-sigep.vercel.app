@@ -86,13 +86,13 @@ export default function ReportsView({
     },
     {
       id: "DICOSAFA",
-      name: "DICOSAFA (Direção de Coordenação de Serviços de Administração, Finanças e de Apoio)",
+      name: "DICOSAFA (Direção de coordenação de serviços administrativos e finanças)",
       icon: <LayoutGrid />,
       color: "purple",
     },
     {
       id: "DICOSSER",
-      name: "DICOSSER (Direção de Coordenação de Serviços Sociais, Estudantis e Registo)",
+      name: "DICOSSER (Direção de coordenação de serviços estudantis e registo)",
       icon: <FileCheck />,
       color: "green",
     },

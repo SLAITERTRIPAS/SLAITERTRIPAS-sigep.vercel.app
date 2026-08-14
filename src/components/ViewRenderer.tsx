@@ -1,6 +1,7 @@
 import React from "react";
 import SplashScreen from "../blocos/bloco1_apresentacao/SplashScreen";
 import LoginScreen from "../blocos/bloco1_apresentacao/LoginScreen";
+import SectorSelectionScreen from "../blocos/bloco1_apresentacao/SectorSelectionScreen";
 import MainMenu from "../blocos/bloco1_apresentacao/MainMenu";
 import SistemaView from "../blocos/bloco5_sistema/SistemaView";
 import DirectorDashboard from "../blocos/bloco2_orgaos_gestao/DirectorDashboard";
@@ -260,13 +261,24 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
     );
   }
 
-  if (!user && view !== "login" && view !== "registration_form" && view !== "visitor_welcome" && view !== "visitor_services" && view !== "library_visit" && view !== "monografia") {
+  if (!user && view !== "login" && view !== "sector_selection" && view !== "registration_form" && view !== "visitor_welcome" && view !== "visitor_services" && view !== "library_visit" && view !== "monografia") {
     return <LoginScreen onClose={goBack} onLogin={onLogin} onRegisterClick={() => onSetView("registration_form")} events={events} />;
   }
 
   switch (view) {
     case "login":
       return <LoginScreen onClose={goBack} onLogin={onLogin} onRegisterClick={() => onSetView("registration_form")} events={events} />;
+
+    case "sector_selection":
+      return (
+        <SectorSelectionScreen
+          user={extendedUser || user}
+          onSelectSector={(sector) => {
+            if (setDashboardTitle) setDashboardTitle(sector);
+            onSetView("dashboard");
+          }}
+        />
+      );
 
     case "menu":
       if (extendedUser && !isSuperBossUser(extendedUser)) {
@@ -648,6 +660,24 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
         <PlanoWorkflowView
           user={extendedUser}
           title={dashboardTitle || "Plano Setorial"}
+          mode="plano"
+          matrixActivities={matrixActivities}
+          colaboradores={colaboradores}
+          onAddMatrixActivity={(data: any) => firestoreService.matrixActivities.add(data)}
+          onUpdateMatrixActivity={(id: string, data: any) => firestoreService.matrixActivities.update(id, data)}
+          onShowAlert={onShowAlert}
+          onBack={goBack}
+        />
+      );
+
+    case "pesoe":
+    case "pesoe_workflow":
+      return (
+        <PlanoWorkflowView
+          user={extendedUser}
+          title="PESOE"
+          mode="pesoe"
+          initialSubTab="pesoe"
           matrixActivities={matrixActivities}
           colaboradores={colaboradores}
           onAddMatrixActivity={(data: any) => firestoreService.matrixActivities.add(data)}

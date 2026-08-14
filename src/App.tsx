@@ -39,7 +39,6 @@ import {
 import { ProcessingCircle } from "./components/ui/ProcessingCircle";
 import {
   firestoreService,
-  wipeDatabaseExceptExclusions,
 } from "./lib/firestoreService";
 import { databaseMaintenance } from "./lib/databaseMaintenance";
 import {
@@ -86,6 +85,7 @@ export default function App() {
   const [view, setView] = useState<
     | "home"
     | "login"
+    | "sector_selection"
     | "registration_form"
     | "menu"
     | "submenu"
@@ -356,13 +356,7 @@ export default function App() {
         };
 
         try {
-          const storedUserStr = localStorage.getItem("sigep_logged_in_user");
-          if (storedUserStr) {
-            const storedUser = JSON.parse(storedUserStr);
-            if (storedUser && (storedUser.email === firebaseUser.email || storedUser.uid === firebaseUser.uid)) {
-              initialUser = { ...initialUser, ...storedUser };
-            }
-          }
+          // No user cache fallback as per database-first requirement
         } catch (e) {
           console.warn("Erro ao recuperar utilizador local:", e);
         }
@@ -435,15 +429,21 @@ export default function App() {
 
         const usersRef = collection(db, "users");
 
-        // 1. Admin/Proprietário account (SLAITER TRIPAS)
+        // 1. Admin/Proprietário account (Slaiter Tripas)
         const adminData = {
+          nome: "SLAITER TRIPAS",
           name: "SLAITER TRIPAS",
           email: "slaitertripas@gmail.com",
           usuario: "slaitertripas@gmail.com",
-          role: "Admin",
-          efetivo: false,
+          cargo: "Programador e Proprietário do Sistema",
+          role: "Administrador do Sistema (Acesso Soberano)",
+          tipoUsuario: "Administrador do Sistema",
+          status: "Afetado",
+          unidade: "DPEP",
+          efetivo: true,
           isOwner: true,
           mustChangePassword: false,
+          isFirstAccess: false,
           password: "231383",
         };
 
@@ -455,15 +455,24 @@ export default function App() {
 
         if (snapAdmin.empty) {
           console.log(
-            "Semeando Administrador SLAITER TRIPAS no Firestore...",
+            "Semeando Administrador Slaiter Tripas no Firestore...",
           );
-          const docRef = doc(db, "users", "ST108164611");
+          const docId = "ST108164611";
           await setDoc(
-            docRef,
-            { ...adminData, createdAt: new Date().toISOString() },
+            doc(db, "users", docId),
+            { ...adminData, id: docId, createdAt: serverTimestamp() },
             { merge: true },
           );
+        } else {
+          // Garantir que os dados do proprietário estão sempre atualizados e com acesso total
+          const adminDoc = snapAdmin.docs[0];
+          await updateDoc(adminDoc.ref, {
+            ...adminData,
+            updatedAt: serverTimestamp()
+          });
         }
+
+        // 2. Sincronização de utilizadores especiais removida para permitir persistência de senhas personalizadas.
         
         // 3. Garantir acesso prioritário ao programador e administradores
         if (user) {
@@ -477,9 +486,13 @@ export default function App() {
             console.log(
               "Concedendo acesso prioritário ao utilizador privilegiado...",
             );
-            const updatedUser = { ...user, status: "Afetado" };
+            const updatedUser = { 
+              ...user, 
+              status: "Afetado",
+              tipoUsuario: isDeveloper || isAdmin ? "Administrador do Sistema" : user.tipoUsuario || "Usuário Comum"
+            };
             setUser(updatedUser);
-            localStorage.setItem("sigep_user", safeJSONStringify(updatedUser));
+            // Removed localStorage cache update as per database-first requirement
 
             // Tentar atualizar no Firestore também
             const q = query(usersRef, where("email", "==", user.email || ""));
@@ -907,14 +920,40 @@ export default function App() {
       // Administradores continuam a ir para o menu principal para gestão total
       setView("menu");
     } else {
-      // Utilizadores comuns são enviados diretamente para a sua área de afetação
-      const workspace = getUserWorkspace(userData);
-      if (workspace) {
-        setDashboardTitle(workspace);
-        setView("dashboard");
+      const norm = (s: any) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const tipoNorm = norm(userData.tipo);
+      const cargoNorm = norm(userData.cargo);
+      const roleNorm = norm(userData.role);
+      const cargoChefiaNorm = norm(userData.cargoChefia);
+
+      const isTecnico =
+        tipoNorm === "cta" ||
+        cargoNorm.includes("tecnico") ||
+        roleNorm.includes("tecnico") ||
+        cargoChefiaNorm.includes("tecnico") ||
+        (Array.isArray(userData.setoresAtribuidos) && userData.setoresAtribuidos.length > 0);
+
+      const sectorsList = [
+        getUserWorkspace(userData),
+        userData.reparticao,
+        userData.setor,
+        ...(Array.isArray(userData.setoresAtribuidos) ? userData.setoresAtribuidos : [])
+      ].filter((s: string) => typeof s === "string" && s.trim() !== "" && s !== "Nenhum" && s !== "-");
+
+      const uniqueSectors = Array.from(new Set(sectorsList));
+
+      if (isTecnico && uniqueSectors.length > 0) {
+        setView("sector_selection");
       } else {
-        // Fallback caso não tenha área definida (não deve acontecer com dados integrados)
-        setView("menu");
+        // Utilizadores comuns são enviados diretamente para a sua área de afetação
+        const workspace = getUserWorkspace(userData);
+        if (workspace) {
+          setDashboardTitle(workspace);
+          setView("dashboard");
+        } else {
+          // Fallback caso não tenha área definida (não deve acontecer com dados integrados)
+          setView("menu");
+        }
       }
     }
   };
@@ -926,57 +965,11 @@ export default function App() {
       // 1. Sync Chefia Accounts
       const result = await firestoreService.syncChefiaAccounts(colaboradores);
 
-      // 2. Migrate System Config if missing in cloud but present in local
-      try {
-        const cloudConfig = await firestoreService.config.get("main_config");
-        if (!cloudConfig) {
-          const localName = localStorage.getItem("proprietarioName");
-          if (localName) {
-            await firestoreService.config.set("main_config", {
-              proprietarioName: localName,
-              proprietarioCargo:
-                localStorage.getItem("proprietarioCargo") || "",
-              proprietarioPhoto:
-                localStorage.getItem("proprietarioPhoto") || null,
-              itEmail: localStorage.getItem("itEmail") || "",
-              itWhatsapp: localStorage.getItem("itWhatsapp") || "",
-              itLinkedin: localStorage.getItem("itLinkedin") || "",
-              itFacebook: localStorage.getItem("itFacebook") || "",
-              itWeb: localStorage.getItem("itWeb") || "",
-            });
-          }
-        }
-      } catch (e) {
-        console.warn("Skip config migration during sync:", e);
-      }
-
-      // 3. Migrate Monografia if missing in cloud
-      try {
-        const cloudMono =
-          await firestoreService.monografia.getById("main_mono");
-        if (!cloudMono) {
-          const localAuthor = localStorage.getItem("mono_authorName");
-          if (localAuthor) {
-            await firestoreService.monografia.set("main_mono", {
-              authorName: localAuthor,
-              monoTitle: localStorage.getItem("mono_title") || "",
-              orientador: localStorage.getItem("mono_orientador") || "",
-              dedicatoriaText:
-                localStorage.getItem("mono_dedicatoria_v3") || "",
-              agradecimentosText:
-                localStorage.getItem("mono_agradecimentos") || "",
-              resumoText: localStorage.getItem("mono_resumo_v3") || "",
-              abstractText: localStorage.getItem("mono_abstract") || "",
-              updatedAt: new Date().toISOString(),
-            });
-          }
-        }
-      } catch (e) {
-        console.warn("Skip mono migration during sync:", e);
-      }
-
+      // 2. System Config and Monografia are already managed via their respective views with direct Firestore persistence.
+      // No more localStorage migration needed as per "Direct Firestore Persistence" requirement.
+      
       alert(
-        `Sincronização concluída com sucesso!\n\n- Contas de chefia e liderança atualizadas e sincronizadas.\n- Novas contas criadas: ${result.created}\n- Contas existentes atualizadas: ${result.updated}\n- Configurações e dados da monografia sincronizados na nuvem.\n\nAgora todas as atualizações feitas por qualquer utilizador são visíveis em tempo real em ambos os links.`,
+        `Sincronização concluída com sucesso!\n\n- Contas de chefia e liderança atualizadas e sincronizadas.\n- Novas contas criadas: ${result.created}\n- Contas existentes atualizadas: ${result.updated}\n\nAgora todas as atualizações feitas por qualquer utilizador são visíveis em tempo real em todos os links.`,
       );
     } catch (error) {
       console.error("Erro na sincronização global:", error);

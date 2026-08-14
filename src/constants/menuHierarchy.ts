@@ -153,13 +153,13 @@ export const baseMenuItems = [
     ],
   },
   {
-    title: "Unidade Orgânica",
+    title: "Serviços Centrais",
     icon: Briefcase,
     color: "bg-gray-600",
     items: [
       {
         title:
-          "Direção de Coordenação de Serviços de Administração, Finanças e de Apoio (DICOSAFA)",
+          "Direção de coordenação de serviços administrativos e finanças (DICOSAFA)",
         subItems: [
           { title: "Diretor da DICOSAFA" },
           {
@@ -241,7 +241,7 @@ export const baseMenuItems = [
       },
       {
         title:
-          "Direção de Coordenação de Serviços Académicos, Sociais, Extensão e Relações Públicas (DICOSSER)",
+          "Direção de coordenação de serviços estudantis e registo (DICOSSER)",
         subItems: [
           { title: "Diretor da DICOSSER" },
           {

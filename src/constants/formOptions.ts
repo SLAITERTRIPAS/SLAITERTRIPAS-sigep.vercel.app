@@ -96,7 +96,7 @@ export const DEPARTAMENTOS: Record<string, string[]> = {
     "Departamento Lar de Estudantes",
     "Departamento de Produção Alimentar",
   ],
-  "Direção de Coordenação de Serviços de Administração, Finanças e de Apoio (DICOSAFA)": [
+  "Direção de coordenação de serviços administrativos e finanças (DICOSAFA)": [
     "Diretor da DICOSAFA",
     "Departamento de Recursos Humanos",
     "Departamento de Finanças",
@@ -112,7 +112,7 @@ export const DEPARTAMENTOS: Record<string, string[]> = {
     "Departamento de Assuntos Estudantis",
     "Departamento de Biblioteca",
   ],
-  "Direção de Coordenação de Serviços Académicos, Sociais, Extensão e Relações Públicas (DICOSSER)": [
+  "Direção de coordenação de serviços estudantis e registo (DICOSSER)": [
     "Diretor da DICOSSER",
     "Departamento de Registo Académico",
     "Departamento de Assuntos Estudantis",
@@ -204,6 +204,16 @@ export const REPARTICOES: Record<string, string[]> = {
   ],
   "Diretor-Geral": ["Chefe do GDG", "Secretaria Executiva"],
   "Departamento de Unidade Gestora e Executora de Aquisições": [
+    "Gestão de Fornecedores",
+    "Plano de Aquisição",
+    "Plano de Contratação",
+  ],
+  "Unidade Gestora e Executora de Aquisições": [
+    "Gestão de Fornecedores",
+    "Plano de Aquisição",
+    "Plano de Contratação",
+  ],
+  UGEA: [
     "Gestão de Fornecedores",
     "Plano de Aquisição",
     "Plano de Contratação",
@@ -3128,8 +3138,8 @@ export const SECOES = [
   "Departamento de Práticas de Geração de Negócio e Desenvolvimento Empresarial (DPGNDE)",
   "Departamento de Consultoria, Estudos, Projetos e Angariação de Fundos (DCPAF)",
   "Departamento de Prospecção de Oportunidade de Negócio (DPONE)",
-  "Direção de Coordenação de Serviços de Administração, Finanças e de Apoio (DICOSAFA)",
-  "Direção de Coordenação de Serviços Académicos, Sociais, Extensão e Relações Públicas (DICOSSER)",
+  "Direção de coordenação de serviços administrativos e finanças (DICOSAFA)",
+  "Direção de coordenação de serviços estudantis e registo (DICOSSER)",
   "Diretor da DICOSAFA",
   "Departamento de Recursos Humanos",
   "Departamento de Finanças",
@@ -3204,10 +3214,10 @@ export const FUNCIONARIOS = EFETIVO_GERAL_DATA.filter((f) => {
   const usuarioLower = (f.usuario || "").toLowerCase();
   const idLower = (f.id || "").toLowerCase();
 
-  // Permitir conta de colaborador regular de SLAITER TRIPAS
+  // Permitir conta de colaborador regular de Slaiter Tripas
   if (
-    emailLower === "fttripas@gmail.com" ||
-    usuarioLower === "fttripas@gmail.com" ||
+    emailLower === "slaitertripas@gmail.com" ||
+    usuarioLower === "slaitertripas@gmail.com" ||
     idLower.includes("colaborador_108164611") ||
     idLower.includes("108164611")
   ) {

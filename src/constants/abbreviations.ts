@@ -11,12 +11,12 @@ export const ABBREVIATIONS = [
   {
     sigla: "DICOSAFA",
     significado:
-      "Direção de Coordenação de Serviços de Administração, Finanças e de Apoio",
+      "Direção de coordenação de serviços administrativos e finanças",
   },
   {
     sigla: "DICOSSER",
     significado:
-      "Direção de Coordenação de Serviços Académicos, Sociais, Extensão e Relações Públicas",
+      "Direção de coordenação de serviços estudantis e registo",
   },
   { sigla: "GDG", significado: "Gabinete do Diretor-Geral" },
   {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Bell, FileText, Clock, ChevronRight, AlertCircle, ShieldAlert, Sparkles, CheckCircle2, Wrench, RefreshCw } from "lucide-react";
+import { Bell, FileText, Clock, ChevronRight, AlertCircle, ShieldAlert, Sparkles, CheckCircle2, Wrench, RefreshCw, CheckCheck } from "lucide-react";
 import { firestoreService } from "../../lib/firestoreService";
 import ModalProcessarRequisicao from "./ModalProcessarRequisicao";
 import ModalProcessarExpediente from "./ModalProcessarExpediente";
@@ -25,6 +25,55 @@ export default function NotificationCenter({ user }: { user: any }) {
   const [fixSuccessMsg, setFixSuccessMsg] = useState<string | null>(null);
 
   const isAdmin = user && (user.isOwner || user.role === "Administrador do Sistema" || isSuperBossUser(user));
+
+  // Memory for read notifications from Firestore
+  const [readIds, setReadIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const unsub = firestoreService.subscribeToDocument<any>("notification_read_status", user.id, (docData) => {
+      if (docData && Array.isArray(docData.readIds)) {
+        setReadIds(docData.readIds);
+      }
+    });
+    return () => unsub();
+  }, [user?.id]);
+
+  const markAsRead = async (id: string) => {
+    if (!id || !user?.id) return;
+    if (readIds.includes(id)) return;
+    
+    const next = [...readIds, id];
+    setReadIds(next);
+    
+    try {
+      await firestoreService.notification_read_status.set(user.id, {
+        readIds: next,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (e) {
+      console.error("Erro ao guardar notificações lidas no Firestore:", e);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    if (!user?.id) return;
+    const allIds = pendingForMe
+      .map((item) => item.id || item.numero || item.identifier)
+      .filter(Boolean);
+    
+    const next = Array.from(new Set([...readIds, ...allIds]));
+    setReadIds(next);
+    
+    try {
+      await firestoreService.notification_read_status.set(user.id, {
+        readIds: next,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (e) {
+      console.error("Erro ao guardar todas notificações lidas no Firestore:", e);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -191,7 +240,12 @@ export default function NotificationCenter({ user }: { user: any }) {
         )
       );
 
-  const totalNotifications = pendingForMe.length + (hasAnomalies ? activeAnomalies.length : 0);
+  const unreadPending = pendingForMe.filter((item) => {
+    const itemId = item.id || item.numero || item.identifier;
+    return !readIds.includes(itemId);
+  });
+
+  const totalNotifications = unreadPending.length + (hasAnomalies ? activeAnomalies.length : 0);
 
   return (
     <div className="relative">
@@ -229,11 +283,23 @@ export default function NotificationCenter({ user }: { user: any }) {
                   <AlertCircle size={14} className="text-amber-400" />{" "}
                   Notificações do Sistema
                 </h3>
-                {isAdmin && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-900 text-indigo-200 border border-indigo-700 flex items-center gap-1">
-                    <Sparkles size={10} className="text-amber-300" /> Diagnóstico Ativo
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {unreadPending.length > 0 && (
+                    <button
+                      onClick={markAllAsRead}
+                      className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 transition-all flex items-center gap-1 border border-white/20"
+                      title="Marcar todas as notificações como lidas"
+                    >
+                      <CheckCheck size={12} className="text-emerald-400" />
+                      <span>Limpar ({unreadPending.length})</span>
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-900 text-indigo-200 border border-indigo-700 flex items-center gap-1">
+                      <Sparkles size={10} className="text-amber-300" /> Diagnóstico
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Admin Intelligent Diagnostics Alert Section */}
@@ -341,44 +407,61 @@ export default function NotificationCenter({ user }: { user: any }) {
                     ))}
 
                     {/* Regular process notifications */}
-                    {pendingForMe.map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => {
-                          if (item.etapaAtual !== undefined) {
-                            setSelectedReq(item);
-                          } else if (item.numero) {
-                            setSelectedExp(item);
-                          } else {
-                            setSelectedReset(item);
-                          }
-                        }}
-                        className="w-full p-4 hover:bg-slate-50 transition-all text-left group"
-                      >
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="text-[10px] font-mono font-black text-slate-400">
-                            {item.numero || "RESET"}
-                          </span>
-                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${item.etapaAtual ? "bg-blue-100 text-blue-600" : item.numero ? "bg-amber-100 text-amber-600" : "bg-red-100 text-red-600"}`}>
-                            {item.etapaAtual
-                              ? `Etapa ${item.etapaAtual}`
-                              : item.numero ? "Expediente" : "Redefinição de Senha"}
-                          </span>
-                        </div>
-                        <h4 className="text-sm font-black text-slate-800 line-clamp-1">
-                          {item.solicitante || item.origem || item.identifier}
-                        </h4>
-                        <p className="text-[10px] text-slate-500 font-medium italic mt-1 line-clamp-2">
-                          {item.etapaAtual ? "Requisição Interna" : item.numero ? "Documento" : "Solicitação de redefinição de senha"} aguardando seu parecer técnico/administrativo.
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-3 text-blue-600 opacity-0 group-hover:opacity-100 transition-all">
-                          <span className="text-[10px] font-black">
-                            Processar agora
-                          </span>
-                          <ChevronRight size={14} />
-                        </div>
-                      </button>
-                    ))}
+                    {pendingForMe.map((item) => {
+                      const itemId = item.id || item.numero || item.identifier;
+                      const isRead = readIds.includes(itemId);
+
+                      return (
+                        <button
+                          key={itemId}
+                          onClick={() => {
+                            markAsRead(itemId);
+                            if (item.etapaAtual !== undefined) {
+                              setSelectedReq(item);
+                            } else if (item.numero) {
+                              setSelectedExp(item);
+                            } else {
+                              setSelectedReset(item);
+                            }
+                          }}
+                          className={`w-full p-4 hover:bg-slate-50 transition-all text-left group ${isRead ? "bg-slate-50/60 opacity-80" : "bg-white"}`}
+                        >
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-[10px] font-mono font-black text-slate-400">
+                              {item.numero || "RESET"}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${item.etapaAtual ? "bg-blue-100 text-blue-600" : item.numero ? "bg-amber-100 text-amber-600" : "bg-red-100 text-red-600"}`}>
+                                {item.etapaAtual
+                                  ? `Etapa ${item.etapaAtual}`
+                                  : item.numero ? "Expediente" : "Redefinição de Senha"}
+                              </span>
+                              {isRead ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 flex items-center gap-0.5">
+                                  <CheckCircle2 size={10} className="text-emerald-600" /> Lido
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-600 text-white animate-pulse">
+                                  Novo
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <h4 className={`text-sm font-black ${isRead ? "text-slate-600" : "text-slate-800"} line-clamp-1`}>
+                            {item.solicitante || item.origem || item.identifier}
+                          </h4>
+                          <p className="text-[10px] text-slate-500 font-medium italic mt-1 line-clamp-2">
+                            {item.etapaAtual ? "Requisição Interna" : item.numero ? "Documento" : "Solicitação de redefinição de senha"} aguardando seu parecer técnico/administrativo.
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-3 text-blue-600 opacity-0 group-hover:opacity-100 transition-all">
+                            <span className="text-[10px] font-black">
+                              {isRead ? "Ver detalhes" : "Processar agora"}
+                            </span>
+                            <ChevronRight size={14} />
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

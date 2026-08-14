@@ -1,37 +1,30 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-// Global safety patch for JSON.stringify to handle circular structures (e.g. minified SDK objects Y2, Ka, etc.)
+// Global safety patch for JSON.stringify to handle circular structures
 if (typeof window !== "undefined" && !(window as any).__sigep_json_patch__) {
   (window as any).__sigep_json_patch__ = true;
   const originalStringify = JSON.stringify;
   JSON.stringify = function (value: any, replacer?: any, space?: any) {
-    try {
-      return originalStringify.call(JSON, value, replacer, space);
-    } catch (err: any) {
-      if (
-        err &&
-        (err.name === "TypeError" || String(err).includes("TypeError")) &&
-        (String(err?.message || err).toLowerCase().includes("circular"))
-      ) {
-        const seen = new WeakSet();
-        const safeReplacer = function (this: any, key: string, val: any) {
-          if (val !== null && typeof val === "object") {
-            if (seen.has(val)) return "[Circular]";
-            seen.add(val);
-          }
-          if (typeof replacer === "function") {
-            return replacer.call(this, key, val);
-          }
-          return val;
-        };
-        try {
-          return originalStringify.call(JSON, value, safeReplacer, space);
-        } catch (e) {
-          return '"[Circular Structure]"';
-        }
+    const seen = new WeakSet();
+    const circularReplacer = function (this: any, key: string, val: any) {
+      if (val !== null && typeof val === "object") {
+        if (seen.has(val)) return "[Circular]";
+        seen.add(val);
       }
-      throw err;
+      if (typeof replacer === "function") {
+        return replacer.call(this, key, val);
+      }
+      return val;
+    };
+    try {
+      return originalStringify.call(JSON, value, replacer || circularReplacer, space);
+    } catch (err) {
+      try {
+        return originalStringify.call(JSON, value, circularReplacer, space);
+      } catch (e) {
+        return '"[Circular Structure]"';
+      }
     }
   };
 }
@@ -40,7 +33,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-import { onAuthStateChanged } from "firebase/auth"; // Not used here but keep if any other import was there, actually let's just import EFETIVO_GERAL_DATA
 import { EFETIVO_GERAL_DATA } from "../constants/colaboradoresList";
 
 /**

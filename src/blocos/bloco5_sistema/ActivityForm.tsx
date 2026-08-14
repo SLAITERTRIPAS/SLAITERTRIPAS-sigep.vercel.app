@@ -342,28 +342,7 @@ export default function ActivityForm({
   user,
   readOnly = false,
 }: ActivityFormProps) {
-  const activeUser = useMemo(() => {
-    if (user && (user.nome || user.name || user.fullName || user.direcao || user.departamento)) return user;
-    try {
-      const stored = localStorage.getItem("sigep_logged_in_user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && (parsed.nome || parsed.name || parsed.fullName || parsed.direcao || parsed.departamento || parsed.id)) {
-          return parsed;
-        }
-      }
-      const storedUser = localStorage.getItem("sigep_user");
-      if (storedUser) {
-        const parsed = JSON.parse(storedUser);
-        if (parsed && (parsed.nome || parsed.name || parsed.fullName || parsed.direcao || parsed.departamento || parsed.id)) {
-          return parsed;
-        }
-      }
-    } catch (e) {
-      console.warn("Erro ao obter utilizador logado em ActivityForm:", e);
-    }
-    return user || null;
-  }, [user]);
+  const activeUser = user || null;
   const [plannedActivities, setPlannedActivities] = useState<any[]>([]);
 
   useEffect(() => {
@@ -939,9 +918,6 @@ export default function ActivityForm({
     ? `activity_edit_${initialData.id}`
     : "activity_new";
 
-  // Draft key unique to user and activity context
-  const DRAFT_KEY = `activity_draft_${user?.id || "anonymous"}_${FORM_ID}`;
-
   useEffect(() => {
     // Check for existing draft on mount
     const checkDraft = async () => {
@@ -952,16 +928,13 @@ export default function ActivityForm({
 
       try {
         console.log(`[Draft] Verificando rascunhos para ${FORM_ID}...`);
-        // 1. Check Cloud Draft (Priority)
+        // Check Cloud Draft
         const cloudDraft = await firestoreService.drafts.getByUserAndForm(
           user.id,
           FORM_ID,
         );
 
-        // 2. Check Local Draft (Fallback)
-        const localSaved = localStorage.getItem(DRAFT_KEY);
-
-        if (cloudDraft || localSaved) {
+        if (cloudDraft) {
           console.log(`[Draft] Rascunho encontrado para ${FORM_ID}`);
           setShowDraftModal(true);
         } else {
@@ -977,7 +950,7 @@ export default function ActivityForm({
   }, [user?.id, initialData?.id]);
 
   useEffect(() => {
-    // Auto-save to Firestore and localStorage on every change
+    // Auto-save to Firestore on every change
     // Only save if draft was loaded (to prevent overwriting with initial state)
     if (isDraftLoaded && user?.id) {
       const draftData = {
@@ -986,16 +959,13 @@ export default function ActivityForm({
         lastSync: new Date().toISOString(),
       };
 
-      // Immediate Local Backup
-      localStorage.setItem(DRAFT_KEY, safeJSONStringify(draftData));
-
       // Debounced Cloud Sync
       const timeoutId = setTimeout(() => {
         setIsSyncing(true);
         firestoreService.drafts
           .save(user.id, FORM_ID, draftData)
           .finally(() => setIsSyncing(false));
-      }, 15000); // 15 second debounce for cloud sync to conserve quota
+      }, 5000); // Reduced debounce for more immediate persistence
 
       return () => clearTimeout(timeoutId);
     }
@@ -1006,17 +976,11 @@ export default function ActivityForm({
     if (!user?.id) return;
 
     try {
-      // Priority to Cloud Draft
-      let draftToRecover = await firestoreService.drafts.getByUserAndForm(
+      // Cloud Draft Only
+      const draftToRecover = await firestoreService.drafts.getByUserAndForm(
         user.id,
         FORM_ID,
       );
-
-      // Fallback to Local if Cloud is empty
-      if (!draftToRecover) {
-        const localData = localStorage.getItem(DRAFT_KEY);
-        if (localData) draftToRecover = JSON.parse(localData);
-      }
 
       if (draftToRecover) {
         const parsed: any = draftToRecover;
@@ -1039,6 +1003,15 @@ export default function ActivityForm({
       console.error("Erro ao recuperar rascunho", e);
     }
 
+    // Uma vez reutilizado/recuperado, o rascunho desaparece até haver outro
+    if (user?.id) {
+      try {
+        await firestoreService.drafts.deleteByUserAndForm(user.id, FORM_ID);
+      } catch (err) {
+        console.error("Erro ao eliminar rascunho após recuperação:", err);
+      }
+    }
+
     setIsDraftLoaded(true);
     setShowDraftModal(false);
   };
@@ -1047,7 +1020,6 @@ export default function ActivityForm({
     if (user?.id) {
       await firestoreService.drafts.deleteByUserAndForm(user.id, FORM_ID);
     }
-    localStorage.removeItem(DRAFT_KEY);
     setIsDraftLoaded(true);
     setShowDraftModal(false);
   };
@@ -2521,8 +2493,7 @@ export default function ActivityForm({
         user.categoria?.toLowerCase()?.includes("proprietário") ||
         (user.name || "").toLowerCase().includes("administrador") ||
         user.email === "admin@isps.ac.mz" ||
-        user.email === "slaitertripas@gmail.com" ||
-        user.email === "fttripas@gmail.com");
+        user.email === "slaitertripas@gmail.com");
 
     // 2. Fallback: preencher com base no contexto de navegação (sectorName) se for Admin ou não houver utilizador logado
     if (sectorName && (isAdmin || !user)) {
@@ -2671,8 +2642,7 @@ export default function ActivityForm({
             user.categoria?.toLowerCase()?.includes("proprietário") ||
             (user.name || "").toLowerCase().includes("administrador") ||
             user.email === "admin@isps.ac.mz" ||
-            user.email === "slaitertripas@gmail.com" ||
-            user.email === "fttripas@gmail.com");
+            user.email === "slaitertripas@gmail.com");
 
         // Validação de alocação desativada por solicitação de remoção de restrições de alocação
         if (false && !isUserAdmin && user) {
@@ -6682,7 +6652,6 @@ export default function ActivityForm({
                         .deleteByUserAndForm(user.id, FORM_ID)
                         .catch(console.warn);
                     }
-                    localStorage.removeItem(DRAFT_KEY);
 
                     const months = formData.mesesRealizacao && formData.mesesRealizacao.length > 0
                       ? formData.mesesRealizacao

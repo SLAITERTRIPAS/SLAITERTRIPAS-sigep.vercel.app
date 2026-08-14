@@ -213,8 +213,23 @@ export function openPrintDocumentWindow(options: PrintDocumentOptions) {
         ${direcao ? `<span>DIREÇÃO: ${direcao}</span>` : ""}
       </div>
 
-      <div style="margin-bottom: 15px;">
-        <img src="https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad" alt="Logo ISPS" style="height: 100px; object-fit: contain;" />
+      <div style="margin-bottom: 15px; display: flex; justify-content: center; align-items: center;">
+        <img 
+          src="https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad" 
+          alt="Logo ISPS" 
+          style="height: 100px; max-width: 140px; object-fit: contain;" 
+          onerror="this.style.display='none'; document.getElementById('isps-print-svg-fallback').style.display='block';"
+        />
+        <div id="isps-print-svg-fallback" style="display: none;">
+          <svg viewBox="0 0 160 160" width="100" height="100" style="display: block; margin: 0 auto;">
+            <circle cx="80" cy="80" r="74" fill="#0f2b5c" stroke="#d97706" stroke-width="4"/>
+            <circle cx="80" cy="80" r="58" fill="#ffffff"/>
+            <polygon points="80,30 95,65 130,68 103,92 112,128 80,108 48,128 57,92 30,68 65,65" fill="#d97706" opacity="0.9"/>
+            <path d="M 50 80 Q 80 120 110 80" stroke="#0f2b5c" stroke-width="6" fill="none" stroke-linecap="round"/>
+            <text x="80" y="78" font-family="'Bookman Old Style', Georgia, serif" font-size="22" font-weight="bold" fill="#0f2b5c" text-anchor="middle">ISPS</text>
+            <text x="80" y="96" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#1e3a8a" text-anchor="middle" letter-spacing="1">SONGO</text>
+          </svg>
+        </div>
       </div>
       <h2 style="font-size: 20px; font-weight: 900; text-transform: uppercase; margin: 4px 0; color: #0f172a; letter-spacing: -0.5px;">
         INSTITUTO SUPERIOR POLITÉCNICO DE SONGO

@@ -176,6 +176,30 @@ export default function DirectorDashboard({
     title.toUpperCase().includes("BALANCO") ||
     isPatrimonioBossOrAdmin(user, colaboradores, processos);
 
+  const {
+    isDG,
+    isDC,
+    isCD,
+    isCR,
+    isDCC,
+    isConsRep,
+    isConsAdm,
+    isConsTec,
+    isDICOSAFA_Dept,
+    isGDG,
+  } = getRoles(title);
+
+  const isDPEP =
+    title.toUpperCase().includes("DPEP") ||
+    title.toUpperCase() === "CHEFE DO DPEP" ||
+    title.toUpperCase().includes("PLANIFICAÇÃO, ESTUDOS E PROJETOS") ||
+    title.toUpperCase().includes("PLANIFICAÇÃO ESTUDOS E PROJETOS") ||
+    (user?.departamento || "").toUpperCase().includes("DPEP") ||
+    (user?.departamento || "")
+      .toUpperCase()
+      .includes("PLANIFICAÇÃO, ESTUDOS") ||
+    (user?.departamento || "").toUpperCase().includes("PLANIFICAÇÃO ESTUDOS");
+
   const [activeItem, setActiveItem] = useState(
     initialActiveItem ||
       (title === "Balanço"
@@ -190,7 +214,9 @@ export default function DirectorDashboard({
                 ? "Bolsa de Estudos"
                 : isEstatisticaMain
                   ? "Corpo discente"
-                  : "Visão Geral"),
+                  : isDPEP
+                    ? "Plano"
+                    : "Visão Geral"),
   );
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -287,18 +313,6 @@ export default function DirectorDashboard({
     title.toUpperCase().includes("Relatório") ||
     title.toUpperCase().includes("Plano De Actividade");
 
-  const {
-    isDG,
-    isDC,
-    isDCC,
-    isCD,
-    isCR,
-    isConsRep,
-    isConsAdm,
-    isConsTec,
-    isDICOSAFA_Dept,
-    isGDG,
-  } = getRoles(title);
   const isGestDoc =
     title.toUpperCase() === "Gestão De Documentos" ||
     (["Secretaria Executiva"].includes(title.toUpperCase()) &&
@@ -322,17 +336,6 @@ export default function DirectorDashboard({
     isCD ||
     (isDICOSAFA_Dept && title.toUpperCase().includes("Departamento")) ||
     title.toUpperCase() === "CHEFE DO DPEP";
-
-  const isDPEP =
-    title.toUpperCase().includes("DPEP") ||
-    title.toUpperCase() === "CHEFE DO DPEP" ||
-    title.toUpperCase().includes("PLANIFICAÇÃO, ESTUDOS E PROJETOS") ||
-    title.toUpperCase().includes("PLANIFICAÇÃO ESTUDOS E PROJETOS") ||
-    (user?.departamento || "").toUpperCase().includes("DPEP") ||
-    (user?.departamento || "")
-      .toUpperCase()
-      .includes("PLANIFICAÇÃO, ESTUDOS") ||
-    (user?.departamento || "").toUpperCase().includes("PLANIFICAÇÃO ESTUDOS");
 
   const isDAF =
     title.toUpperCase().includes("DAF") ||
@@ -358,6 +361,22 @@ export default function DirectorDashboard({
       { title: "Balanço", icon: TrendingUp },
       { title: "Atribuir Actividade", icon: CheckSquare },
     ];
+
+    if (isDPEP) {
+      return [
+        { title: "Plano", icon: FileText },
+        { title: "Gestão de Planos", icon: ClipboardList },
+        { title: "Ação Orçamental", icon: DollarSign },
+        { title: "Calendário", icon: Calendar },
+        { title: "Caixa de Mensagens", icon: MessageSquare },
+        { title: "Assinatura Digital", icon: Pen },
+        { title: "Documentos Normativos", icon: FileText },
+        { title: "Gestão de Expediente", icon: FolderOpen },
+        { title: "Relatórios", icon: BarChart3 },
+        { title: "Balanço", icon: TrendingUp },
+        { title: "Atribuir Actividade", icon: CheckSquare },
+      ];
+    }
 
     if (isReparticaoPessoal) {
       return [
@@ -912,6 +931,26 @@ export default function DirectorDashboard({
       );
     }
 
+    if (activeItem === "Gestão de Planos" || activeItem === "PESOE") {
+      return (
+        <PlanoWorkflowView
+          user={user}
+          title={activeItem === "Gestão de Planos" ? "Gestão de Planos" : "PESOE"}
+          mode={activeItem === "Gestão de Planos" ? "gestao_planos" : "pesoe"}
+          initialSubTab={activeItem === "Gestão de Planos" ? "plano_direcoes" : "pesoe"}
+          matrixActivities={matrixActivities || []}
+          onAddMatrixActivity={(data: any) =>
+            firestoreService.matrixActivities.add(data)
+          }
+          onUpdateMatrixActivity={(id: string, data: any) =>
+            firestoreService.matrixActivities.update(id, data)
+          }
+          onShowAlert={onShowAlert}
+          onBack={handleBack}
+        />
+      );
+    }
+
     if (
       activeItem === "Matriz" ||
       activeItem === "Plano" ||
@@ -925,6 +964,7 @@ export default function DirectorDashboard({
         <PlanoWorkflowView
           user={user}
           title={title}
+          mode="plano"
           matrixActivities={matrixActivities || []}
           onAddMatrixActivity={(data: any) =>
             firestoreService.matrixActivities.add(data)

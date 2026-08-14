@@ -236,14 +236,7 @@ export default function RegistarFuncionarioForm({
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const FORM_ID = "registar_funcionario_form";
-  let currentUser: any = {};
-  try {
-    currentUser = JSON.parse(
-      localStorage.getItem("sigep_logged_in_user") || "{}",
-    );
-  } catch (e) {
-    console.warn("Erro ao ler utilizador do localStorage:", e);
-  }
+  const currentUser = user || {};
 
   useEffect(() => {
     const checkDraft = async () => {
@@ -382,6 +375,10 @@ export default function RegistarFuncionarioForm({
         if (draft.estadoMandato) setEstadoMandato(draft.estadoMandato);
         if (draft.numeroProcesso) setNumeroProcesso(draft.numeroProcesso);
         if (draft.ord) setOrd(draft.ord);
+      }
+      // Uma vez reutilizado/recuperado, o rascunho desaparece até haver outro
+      if (currentUser?.id) {
+        await firestoreService.drafts.deleteByUserAndForm(currentUser.id, FORM_ID);
       }
     } catch (e) {
       console.error("Erro ao recuperar rascunho:", e);

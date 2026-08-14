@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import SignatureUpload from "../bloco5_sistema/SignatureUpload";
+import { OfficialDocumentSignatures } from "../../components/OfficialDocumentSignatures";
 
 interface FichaInventarioMovelProps {
   onCancel: () => void;
@@ -1242,6 +1243,15 @@ const FichaInventarioMovel: React.FC<FichaInventarioMovelProps> = ({
               </div>
             </section>
           </fieldset>
+
+          {/* Assinaturas Oficiais Oficiais */}
+          <div className="px-8 pt-6">
+            <OfficialDocumentSignatures
+              user={user}
+              editable={true}
+              date={new Date().toLocaleDateString("pt-MZ")}
+            />
+          </div>
 
           {/* Action Bar */}
           <div className="flex justify-end gap-4 p-8 pt-0 print:hidden">

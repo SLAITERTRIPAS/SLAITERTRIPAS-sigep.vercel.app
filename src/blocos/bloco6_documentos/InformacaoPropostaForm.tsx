@@ -3,6 +3,7 @@ import { Save, Printer, Plus, Trash2, FileText } from "lucide-react";
 import { firestoreService } from "../../lib/firestoreService";
 import SignatureUpload from "../bloco5_sistema/SignatureUpload";
 import { FormLayout } from "../../components/shared/FormLayout";
+import { ISPSLogo } from "../../components/InstitutionAssets";
 
 interface CustosLinha {
   id: string;
@@ -856,12 +857,9 @@ export default function InformacaoPropostaForm({
             {/* Cabeçalho oficial com Logo */}
             <div className="flex justify-between items-start border-b border-slate-200 pb-4">
               <div className="flex items-center gap-4">
-                <img
-                  src="https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad"
-                  alt="Logo ISPS"
-                  className="h-16 w-auto object-contain"
-                  referrerPolicy="no-referrer"
-                />
+                <div className="h-16 w-16 flex items-center justify-center">
+                  <ISPSLogo className="w-full h-full object-contain" alt="Logo ISPS" />
+                </div>
                 <div className="leading-tight text-left">
                   <h1 className="text-xs font-black tracking-tight text-slate-900 uppercase font-sans">
                     INSTITUTO SUPERIOR POLITÉCNICO DE SONGO

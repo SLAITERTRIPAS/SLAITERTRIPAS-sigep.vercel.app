@@ -80,7 +80,10 @@ export interface Colaborador {
     reparticao?: string;
     setor?: string;
   };
+  role?: string;
   mustChangePassword?: boolean;
+  isFirstAccess?: boolean;
+  password?: string;
   disciplinas?: string[];
   lastUpdate?: {
     date: string;
@@ -88,6 +91,7 @@ export interface Colaborador {
   };
   status?: string;
   areaDeAfetacao?: string;
+  tipoUsuario?: "Usuário Comum" | "Chefia" | "Administrador do Sistema";
 }
 
 export interface EstudanteDados {
@@ -435,4 +439,23 @@ export interface PublishedMatrix {
   publishedAt: string;
   activityCount: number;
   status: "published" | "shared";
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role?: string;
+  tipoUsuario?: "Usuário Comum" | "Chefia" | "Administrador do Sistema";
+  isOwner?: boolean;
+  status?: string;
+  lastSeenAt?: string;
+  isOnline?: boolean;
+  photoUrl?: string;
+  unidade?: string;
+  direcao?: string;
+  departamento?: string;
+  reparticao?: string;
+  setor?: string;
+  mustChangePassword?: boolean;
 }

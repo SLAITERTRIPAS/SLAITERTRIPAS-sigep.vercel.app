@@ -76,6 +76,8 @@ export function usePersistentDraft<T>(
       if (draft && draft.formData) {
         setData(draft.formData);
       }
+      // Uma vez reutilizado/recuperado, o rascunho desaparece até haver outro
+      await firestoreService.drafts.deleteByUserAndForm(user.id, formId);
     } catch (e) {
       console.error("Erro ao recuperar rascunho:", e);
     }

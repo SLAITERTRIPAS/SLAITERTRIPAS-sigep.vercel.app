@@ -1,6 +1,3 @@
-export async function wipeDatabaseExceptExclusions() {
-  // Implementation omitted for brevity, keeping only the exported name for linter
-}
 import {
   serverTimestamp,
   collection,
@@ -113,7 +110,7 @@ const DEFAULT_SEED_ACTIVITIES = [
       "Equipar os laboratórios para as aulas práticas do curso de Engenharia Química",
     provincia: "Tete",
     distrito: "Songo",
-    responsavel: "SLAITER TRIPAS",
+    responsavel: "Slaiter Tripas",
     trimestre: "I",
     mes: "Janeiro",
     frequencia: "Pontual",
@@ -151,7 +148,7 @@ const DEFAULT_SEED_ACTIVITIES = [
       "Equipar os laboratórios para as aulas práticas do curso de Engenharia Química",
     provincia: "Tete",
     distrito: "Songo",
-    responsavel: "SLAITER TRIPAS",
+    responsavel: "Slaiter Tripas",
     trimestre: "I",
     mes: "Janeiro",
     frequencia: "Pontual",
@@ -189,7 +186,7 @@ const DEFAULT_SEED_ACTIVITIES = [
       "Prestar contas e analisar os resultados físicos e financeiros do ciclo anterior",
     provincia: "Tete",
     distrito: "Songo",
-    responsavel: "SLAITER TRIPAS",
+    responsavel: "Slaiter Tripas",
     trimestre: "I",
     mes: "Fevereiro",
     frequencia: "Pontual",
@@ -263,7 +260,7 @@ const DEFAULT_SEED_ACTIVITIES = [
     objetivo: "Acompanhar o desempenho didático-pedagógico em campo",
     provincia: "Tete",
     distrito: "Songo",
-    responsavel: "SLAITER TRIPAS",
+    responsavel: "Slaiter Tripas",
     trimestre: "I",
     mes: "Janeiro",
     frequencia: "Pontual",
@@ -298,7 +295,7 @@ const DEFAULT_SEED_ACTIVITIES = [
     objetivo: "Acompanhar o desempenho didático-pedagógico em campo",
     provincia: "Tete",
     distrito: "Songo",
-    responsavel: "SLAITER TRIPAS",
+    responsavel: "Slaiter Tripas",
     trimestre: "I",
     mes: "Janeiro",
     frequencia: "Pontual",
@@ -993,14 +990,28 @@ export const firestoreService = {
   disciplinas_academicas: createCollectionService<any>("disciplinas_academicas"),
   users: createCollectionService<any>("users"),
   accessAlerts: createCollectionService<any>("access_alerts"),
-  monografia: createCollectionService<any>("monografia"),
   institucional_plans: createCollectionService<any>("institucional_plans"),
   reports: createCollectionService<any>("reports"),
+  monografia: {
+    ...createCollectionService<any>("monografia"),
+    set: async (id: string, data: any) => {
+      try {
+        const docRef = doc(db, "monografia", id);
+        await setDoc(docRef, { ...cleanObject(data), updatedAt: serverTimestamp() }, { merge: true });
+        return true;
+      } catch (error) {
+        console.error(`Erro ao salvar monografia ${id}:`, error);
+        return false;
+      }
+    }
+  },
   plan_schedules: createCollectionService<any>("plan_schedules"),
   historico_chefias: createCollectionService<any>("historico_chefias"),
   tetosOrcamentais: createCollectionService<any>("tetos_orcamentais", null),
   produtosUnificados: createCollectionService<any>("produtos_unificados", null),
   password_reset_requests: createCollectionService<any>("password_reset_requests"),
+  notification_read_status: createCollectionService<any>("notification_read_status", null),
+  afetacao_checklist: createCollectionService<any>("afetacao_checklist", null),
   balancoConfig: createCollectionService<any>("balanco_config", null),
   resetUserPasswordToDefault,
   drafts: {
@@ -1076,7 +1087,6 @@ export const firestoreService = {
       console.log(
         `Iniciando semeadura de ${colaboradores.length} colaboradores...`,
       );
-      const colRef = collection(db, "colaboradores");
       let count = 0;
 
       for (const col of colaboradores) {
@@ -1088,20 +1098,24 @@ export const firestoreService = {
         const isChef =
           cargoLower.includes("chefe") || cargoLower.includes("diretor");
 
+        const tipoUsuario = isChef ? "Chefia" : "Usuário Comum";
+
         const mandatoData = isChef
           ? {
               mandatoStatus: col.mandatoStatus || "Ativo",
               mandatoInicio:
                 col.mandatoInicio || new Date().toISOString().split("T")[0],
               isChefiaDefinitiva: true,
+              tipoUsuario,
             }
-          : {};
+          : { tipoUsuario };
 
         await setDoc(
           doc(db, "colaboradores", String(docId)),
           {
             ...col,
             tipo: verifiedTipo,
+            tipoUsuario,
             ...mandatoData,
             updatedAt: serverTimestamp(),
             source: "System Seed",
@@ -1123,138 +1137,17 @@ export const firestoreService = {
 
   cleanAndResequenceMatrixActivities: async () => {
     try {
-      console.log("Iniciando limpeza de duplicados e resequenciação de atividades na base de dados...");
-      const snapshot = await getDocs(collection(db, "matrix_activities"));
-      const allActs = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as any),
-      }));
-
-      // 1. Remove duplicates based on normalized name + departamento
-      const seen = new Set<string>();
-      const uniqueActs: any[] = [];
-      const duplicatesToDelete: string[] = [];
-
-      for (const act of allActs) {
-        const name = (
-          act.nomeAtividade ||
-          act.title ||
-          act.designacao ||
-          ""
-        )
-          .trim()
-          .toLowerCase();
-        const dept = (
-          act.departamento ||
-          act.unidadeOrganica ||
-          "Geral"
-        )
-          .trim()
-          .toLowerCase();
-
-        const key = `${dept}::${name}`;
-
-        if (name && seen.has(key)) {
-          duplicatesToDelete.push(act.id);
-        } else {
-          if (name) seen.add(key);
-          uniqueActs.push(act);
-        }
-      }
-
-      for (const dupId of duplicatesToDelete) {
-        await deleteDoc(doc(db, "matrix_activities", dupId));
-        await deleteDoc(doc(db, "actividades", dupId));
-      }
-
-      // 2. Group by department and resequence starting at 001
-      const deptGroups: Record<string, any[]> = {};
-      uniqueActs.forEach((act) => {
-        const deptKey = (
-          act.departamento ||
-          act.unidadeOrganica ||
-          "Geral"
-        ).trim();
-        if (!deptGroups[deptKey]) deptGroups[deptKey] = [];
-        deptGroups[deptKey].push(act);
-      });
-
-      const directionCounters: Record<string, number> = {};
-      const updates: Promise<any>[] = [];
-
-      for (const deptKey of Object.keys(deptGroups)) {
-        const deptActs = deptGroups[deptKey];
-        deptActs.sort((a, b) => {
-          const noA = parseInt(a.no || a.numeroAtividade || "999", 10);
-          const noB = parseInt(b.no || b.numeroAtividade || "999", 10);
-          return noA - noB;
-        });
-
-        let idx = 1;
-        for (const act of deptActs) {
-          const newNo = String(idx).padStart(3, "0");
-          idx++;
-
-          const dirKey = (act.direcao || "SEM DIREÇÃO").toUpperCase();
-          if (!directionCounters[dirKey]) directionCounters[dirKey] = 0;
-          directionCounters[dirKey]++;
-          const newNumeroDirecao = String(
-            directionCounters[dirKey],
-          ).padStart(3, "0");
-
-          const dirInitials = (
-            act.direcao ||
-            act.unidadeOrganica ||
-            "ISPS"
-          )
-            .slice(0, 3)
-            .toUpperCase();
-          const deptInitials = (act.departamento || "GERAL")
-            .slice(0, 3)
-            .toUpperCase();
-          const actInitials = (
-            act.nomeAtividade ||
-            act.title ||
-            act.designacao ||
-            "ACT"
-          )
-            .slice(0, 3)
-            .toUpperCase();
-
-          const newCode = [
-            dirInitials !== "-" ? dirInitials : "ISPS",
-            deptInitials !== "-" ? deptInitials : "Geral",
-            newNo,
-            actInitials,
-          ]
-            .filter(Boolean)
-            .join("/");
-
-          updates.push(
-            updateDoc(doc(db, "matrix_activities", act.id), {
-              no: newNo,
-              numeroAtividade: newNo,
-              nAtividade: newNo,
-              codigoAtividade: newCode,
-              referencia: newCode,
-              numeroDirecao: newNumeroDirecao,
-            }),
-          );
-        }
-      }
-
-      await Promise.all(updates);
       console.log(
-        `Limpeza concluída: ${duplicatesToDelete.length} duplicados removidos, ${uniqueActs.length} atividades resequenciadas por departamento a partir de 001.`,
+        "Delegando limpeza e resequenciação de atividades ao databaseMaintenance...",
       );
-      return {
-        success: true,
-        removedDuplicates: duplicatesToDelete.length,
-        totalUnique: uniqueActs.length,
-      };
-    } catch (err) {
-      console.error("Erro ao limpar e resequenciar atividades:", err);
-      return { success: false, error: err };
+      const { databaseMaintenance } = await import("./databaseMaintenance");
+      return await databaseMaintenance.removeDuplicateActivitiesAndFixNumbering();
+    } catch (error) {
+      console.error(
+        "Erro ao resequenciar atividades via firestoreService:",
+        error,
+      );
+      return { deletedCount: 0, updatedCount: 0 };
     }
   },
 
@@ -1424,7 +1317,7 @@ export const firestoreService = {
       return {
         success: true,
         collaboratorsDeleted: colResult.deletedCount || 0,
-        matrixRemoved: matrixResult.removedDuplicates || 0,
+        matrixRemoved: matrixResult.deletedCount || 0,
         activitiesDeleted: actDeletedCount,
         suppliersDeleted: supDeletedCount,
       };
@@ -1619,10 +1512,12 @@ export const firestoreService = {
               updatedCount++;
             }
           } else {
+            const defaultPass = col.password || "1234";
+            const defaultMustChange = col.mustChangePassword !== undefined ? col.mustChangePassword : (defaultPass !== "1234" ? false : true);
             await addDoc(collection(db, "users"), {
               ...userData,
-              password: "1234",
-              mustChangePassword: true,
+              password: defaultPass,
+              mustChangePassword: defaultMustChange,
               createdAt: serverTimestamp(),
             });
             createdCount++;

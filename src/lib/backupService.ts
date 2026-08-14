@@ -240,37 +240,11 @@ export async function collectAllBackupData(
       try {
         let docs: BackupDocument[] = [];
         if (db) {
-          try {
-            const snapshot = await getDocs(collection(db, collName));
-            docs = snapshot.docs.map((docItem) => ({
-              id: docItem.id,
-              ...docItem.data(),
-            }));
-          } catch (dbErr) {
-            console.warn(`Aviso ao ler ${collName} no Firestore, a recorrer ao LocalStorage:`, dbErr);
-          }
-        }
-
-        // Mesclar dados do LocalStorage se necessário
-        try {
-          const localKey = `sigep_local_${collName}`;
-          const localVal = localStorage.getItem(localKey);
-          if (localVal) {
-            const parsedLocal: any[] = JSON.parse(localVal);
-            if (Array.isArray(parsedLocal)) {
-              const map = new Map<string, BackupDocument>();
-              docs.forEach((d) => { if (d.id) map.set(d.id, d); });
-              parsedLocal.forEach((item) => {
-                const itemId = item.id || "local_" + Math.random().toString(36).substring(2, 9);
-                if (!map.has(itemId)) {
-                  map.set(itemId, { id: itemId, ...item });
-                }
-              });
-              docs = Array.from(map.values());
-            }
-          }
-        } catch (e) {
-          console.error(`Erro ao mesclar local storage para ${collName}:`, e);
+          const snapshot = await getDocs(collection(db, collName));
+          docs = snapshot.docs.map((docItem) => ({
+            id: docItem.id,
+            ...docItem.data(),
+          }));
         }
 
         if (docs.length > 0) {
@@ -286,30 +260,12 @@ export async function collectAllBackupData(
     }
   }
 
-  // Guardar chaves do LocalStorage auxiliares
-  try {
-    const allLocalKeys: Record<string, any> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && (k.startsWith("sigep_") || k.startsWith("proprietario") || k.startsWith("mono_") || k.startsWith("it") || k.startsWith("config_"))) {
-        try {
-          const val = localStorage.getItem(k);
-          if (val) {
-            allLocalKeys[k] = JSON.parse(val);
-          }
-        } catch (e) {
-          allLocalKeys[k] = localStorage.getItem(k);
-        }
-      }
-    }
-    backupData["_localStorage_all_keys"] = allLocalKeys;
-    const productsVal = localStorage.getItem("sigep_unified_products");
-    if (productsVal) backupData["_localStorage_sigep_unified_products"] = JSON.parse(productsVal);
-    const deletedProdsVal = localStorage.getItem("sigep_deleted_products");
-    if (deletedProdsVal) backupData["_localStorage_sigep_deleted_products"] = JSON.parse(deletedProdsVal);
-  } catch (e) {
-    console.error("Erro ao exportar chaves do LocalStorage:", e);
-  }
+  // Guardar metadados adicionais se necessário
+  backupData["_metadata_system"] = {
+    exportTimestamp: new Date().toISOString(),
+    sistema: "SIGEP ISPS",
+    version: "2.0.0-firestore-only"
+  };
 
   // Estrutura hierárquica complementar por Unidades
   try {
@@ -469,33 +425,14 @@ export async function restoreFullBackup(
     protectedSessionState[k] = localStorage.getItem(k);
   });
 
-  // Restaurar chaves auxiliares
-  if (data["_localStorage_all_keys"] && typeof data["_localStorage_all_keys"] === "object") {
-    try {
-      Object.entries(data["_localStorage_all_keys"]).forEach(([k, v]) => {
-        if (SESSION_KEYS_TO_PROTECT.includes(k)) return;
-        if (v !== undefined && v !== null) {
-          const stringVal = typeof v === "string" ? v : safeJSONStringify(v);
-          localStorage.setItem(k, stringVal);
-        }
-      });
-    } catch (e) {
-      console.error("Erro ao restaurar chaves auxiliares no LocalStorage:", e);
-    }
-  }
+  // Limpar localStorage para garantir consistência total com o backup (dados do sistema)
+  localStorage.clear();
 
   SESSION_KEYS_TO_PROTECT.forEach((k) => {
     if (protectedSessionState[k] !== null) {
       localStorage.setItem(k, protectedSessionState[k]!);
     }
   });
-
-  if (data["_localStorage_sigep_unified_products"]) {
-    localStorage.setItem("sigep_unified_products", safeJSONStringify(data["_localStorage_sigep_unified_products"]));
-  }
-  if (data["_localStorage_sigep_deleted_products"]) {
-    localStorage.setItem("sigep_deleted_products", safeJSONStringify(data["_localStorage_sigep_deleted_products"]));
-  }
 
   // Restauração passo a passo pelos 4 Órgãos
   let organRestoredIndex = 0;
@@ -528,7 +465,6 @@ export async function restoreFullBackup(
       if (!docs || docs.length === 0) continue;
 
       let collCount = 0;
-      const restoredItemsForLocal: any[] = [];
 
       for (let i = 0; i < docs.length; i += 500) {
         const chunk = docs.slice(i, i + 500);
@@ -545,52 +481,14 @@ export async function restoreFullBackup(
               const docRef = doc(db, collName, targetId);
               batch.set(docRef, { ...rest, id: targetId }, { merge: true });
               batchCount++;
-              restoredItemsForLocal.push({ ...rest, id: targetId });
             });
 
             await batch.commit();
             collCount += batchCount;
             totalRestored += batchCount;
           } catch (batchErr) {
-            console.warn(`Aviso ao commitar batch no Firestore para ${collName}:`, batchErr);
-            chunk.forEach((docData) => {
-              if (docData && typeof docData === "object") {
-                const targetId = docData.id || "local_" + Math.random().toString(36).substring(2, 9);
-                restoredItemsForLocal.push({ ...docData, id: targetId });
-                collCount++;
-                totalRestored++;
-              }
-            });
+            console.warn(`Erro ao commitar batch no Firestore para ${collName}:`, batchErr);
           }
-        } else {
-          chunk.forEach((docData) => {
-            if (docData && typeof docData === "object") {
-              const targetId = docData.id || "local_" + Math.random().toString(36).substring(2, 9);
-              restoredItemsForLocal.push({ ...docData, id: targetId });
-              collCount++;
-              totalRestored++;
-            }
-          });
-        }
-      }
-
-      if (restoredItemsForLocal.length > 0) {
-        try {
-          const localKey = `sigep_local_${collName}`;
-          const existingLocal = localStorage.getItem(localKey);
-          let mergedList: any[] = restoredItemsForLocal;
-          if (existingLocal) {
-            const parsed = JSON.parse(existingLocal);
-            if (Array.isArray(parsed)) {
-              const map = new Map<string, any>();
-              parsed.forEach((item) => { if (item && item.id) map.set(item.id, item); });
-              restoredItemsForLocal.forEach((item) => { if (item && item.id) map.set(item.id, item); });
-              mergedList = Array.from(map.values());
-            }
-          }
-          localStorage.setItem(localKey, safeJSONStringify(mergedList));
-        } catch (e) {
-          console.error(`Erro ao salvar no LocalStorage para ${collName}:`, e);
         }
       }
 
@@ -674,33 +572,6 @@ export async function runAutomaticBackup(
     console.warn("Aviso ao salvar backup no Firestore:", e);
   }
 
-  // Guardar no LocalStorage (sem o payload pesado backupData para evitar QuotaExceededError)
-  const lightRecord: SystemBackupRecord = {
-    ...record,
-    backupData: undefined,
-  };
-
-  try {
-    const existingStr = localStorage.getItem("sigep_automatic_backups");
-    let list: SystemBackupRecord[] = [];
-    if (existingStr) {
-      try { list = JSON.parse(existingStr); } catch (e) { list = []; }
-    }
-    list = list.filter((b) => b.id !== backupId);
-    list.unshift(lightRecord);
-    if (list.length > 10) list = list.slice(0, 10);
-
-    localStorage.setItem("sigep_automatic_backups", safeJSONStringify(list));
-    localStorage.setItem("sigep_last_auto_backup_time", String(now.getTime()));
-  } catch (e) {
-    console.error("Erro ao guardar backup automático no LocalStorage:", e);
-    try {
-      localStorage.setItem("sigep_automatic_backups", safeJSONStringify([lightRecord]));
-    } catch (err2) {
-      console.warn("Não foi possível guardar nem a versão leve no localStorage:", err2);
-    }
-  }
-
   dispatchBackupAlert({
     status: "completed",
     message: `Backup Automático concluído com sucesso às ${now.toLocaleTimeString("pt-PT")}! ${totalRecords} registos salvos nos 4 Órgãos.`,
@@ -713,16 +584,35 @@ export async function runAutomaticBackup(
 
 /**
  * Executa o backup automático se tiverem passado mais de 12 horas
+ * O controle de tempo agora é feito via Firestore para persistência centralizada
  */
 export async function runAutomaticBackupIfNeeded(): Promise<SystemBackupRecord | null> {
   try {
-    const lastTimeStr = localStorage.getItem("sigep_last_auto_backup_time");
-    const lastTime = lastTimeStr ? parseInt(lastTimeStr, 10) : 0;
+    if (!db) return null;
+
+    // Tentar obter último backup do Firestore (configurações do sistema)
+    const configRef = doc(db, "config_sistema", "backup_metadata");
+    const configSnap = await getDocs(collection(db, "config_sistema"));
+    const configDoc = configSnap.docs.find(d => d.id === "backup_metadata");
+    
+    let lastTime = 0;
+    if (configDoc && configDoc.exists()) {
+      lastTime = configDoc.data().lastAutoBackupTime || 0;
+    }
+
     const now = Date.now();
 
-    if (now - lastTime > 43200000 || !lastTimeStr) {
+    if (now - lastTime > 43200000 || lastTime === 0) {
       console.log("A iniciar Backup Automático de rotina dos 4 Órgãos...");
-      return await runAutomaticBackup(false);
+      const record = await runAutomaticBackup(false);
+      
+      // Atualizar timestamp no Firestore
+      await setDoc(doc(db, "config_sistema", "backup_metadata"), {
+        lastAutoBackupTime: now,
+        lastBackupId: record.id
+      }, { merge: true });
+      
+      return record;
     }
   } catch (e) {
     console.error("Erro ao verificar/executar backup automático de rotina:", e);
@@ -731,20 +621,10 @@ export async function runAutomaticBackupIfNeeded(): Promise<SystemBackupRecord |
 }
 
 /**
- * Obtém a lista de backups salvos no sistema
+ * Obtém a lista de backups salvos no sistema diretamente do Firestore
  */
 export async function getStoredBackupsList(): Promise<SystemBackupRecord[]> {
   const map = new Map<string, SystemBackupRecord>();
-
-  try {
-    const localStr = localStorage.getItem("sigep_automatic_backups");
-    if (localStr) {
-      const parsed: SystemBackupRecord[] = JSON.parse(localStr);
-      parsed.forEach((b) => map.set(b.id, b));
-    }
-  } catch (e) {
-    console.error("Erro ao ler backups locais:", e);
-  }
 
   if (db) {
     try {
@@ -752,12 +632,7 @@ export async function getStoredBackupsList(): Promise<SystemBackupRecord[]> {
       snapshot.docs.forEach((docItem) => {
         const data = docItem.data() as SystemBackupRecord;
         if (data && data.id) {
-          if (map.has(data.id)) {
-            const existing = map.get(data.id)!;
-            map.set(data.id, { ...existing, ...data, backupData: data.backupData || existing.backupData });
-          } else {
-            map.set(data.id, data);
-          }
+          map.set(data.id, data);
         }
       });
     } catch (e) {

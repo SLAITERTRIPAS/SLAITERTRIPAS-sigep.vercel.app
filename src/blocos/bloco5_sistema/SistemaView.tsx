@@ -69,6 +69,8 @@ import { exportFullBackup, restoreFullBackup } from "../../lib/backupService";
 
 import { databaseMaintenance } from "../../lib/databaseMaintenance";
 
+import ProjetoTeoricoView from "../bloco5_sistema/ProjetoTeoricoView";
+
 export default function SistemaView({
   onBack,
   onLogout,
@@ -158,13 +160,13 @@ export default function SistemaView({
   const [version, setVersion] = useState("SIGEP/V1.00.2025");
   const [isSyncing, setIsSyncing] = useState(false);
   const [ownerPhoto, setOwnerPhoto] = useState<string | null>(null);
-  const [ownerName, setOwnerName] = useState("SLAITER TRIPAS");
-  const [ownerCargo, setOwnerCargo] = useState("PROPRIETÁRIO E PROGRAMADOR");
-  const [itEmail, setItEmail] = useState("fttripas@gmail.com");
+  const [ownerName, setOwnerName] = useState("Slaiter Tripas");
+  const [ownerCargo, setOwnerCargo] = useState("Programador e Proprietário do Sistema");
+  const [itEmail, setItEmail] = useState("slaitertripas@gmail.com");
   const [itWhatsapp, setItWhatsapp] = useState("+258 84 9547771");
-  const [itLinkedin, setItLinkedin] = useState("linkedin.com/in/fttripas");
-  const [itFacebook, setItFacebook] = useState("facebook.com/fttripas");
-  const [itWeb, setItWeb] = useState("www.fttripas.com");
+  const [itLinkedin, setItLinkedin] = useState("linkedin.com/in/slaitertripas");
+  const [itFacebook, setItFacebook] = useState("facebook.com/slaitertripas");
+  const [itWeb, setItWeb] = useState("www.slaitertripas.com");
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
@@ -201,29 +203,10 @@ export default function SistemaView({
           if (data.itFacebook) setItFacebook(data.itFacebook);
           if (data.itWeb) setItWeb(data.itWeb);
         } else {
-          // Fallback to localStorage for migration or defaults
-          const savedName = localStorage.getItem("proprietarioName");
-          const savedCargo = localStorage.getItem("proprietarioCargo");
-          const savedPhoto = localStorage.getItem("proprietarioPhoto");
-          const savedEmail = localStorage.getItem("itEmail");
-          const savedWhatsapp = localStorage.getItem("itWhatsapp");
-          const savedLinkedin = localStorage.getItem("itLinkedin");
-          const savedFacebook = localStorage.getItem("itFacebook");
-          const savedWeb = localStorage.getItem("itWeb");
-
-          if (savedName) setOwnerName(savedName);
-          if (savedCargo) setOwnerCargo(savedCargo);
-          if (savedPhoto) setOwnerPhoto(savedPhoto);
-          if (savedEmail) setItEmail(savedEmail);
-          if (savedWhatsapp) setItWhatsapp(savedWhatsapp);
-          if (savedLinkedin) setItLinkedin(savedLinkedin);
-          if (savedFacebook) setItFacebook(savedFacebook);
-          if (savedWeb) setItWeb(savedWeb);
-
+          // No cloud config found, defaults are already in state (Slaiter Tripas, etc.)
           if (isSuperBossUser(user) && user) {
-            if (!savedName || savedName === "ISPS")
-              setOwnerName(user.name || "ISPS");
-            if (!savedCargo) setOwnerCargo(user.cargo || user.role || "");
+            setOwnerName(user.name || "Slaiter Tripas");
+            setOwnerCargo(user.cargo || user.role || "Programador e Proprietário do Sistema");
           }
         }
       },
@@ -271,16 +254,6 @@ export default function SistemaView({
           updatedAt: new Date().toISOString(),
         });
       }
-
-      // Also update localStorage for offline/backup
-      localStorage.setItem("proprietarioName", ownerName);
-      localStorage.setItem("proprietarioCargo", ownerCargo);
-      if (ownerPhoto) localStorage.setItem("proprietarioPhoto", ownerPhoto);
-      localStorage.setItem("itEmail", itEmail);
-      localStorage.setItem("itWhatsapp", itWhatsapp);
-      localStorage.setItem("itLinkedin", itLinkedin);
-      localStorage.setItem("itFacebook", itFacebook);
-      localStorage.setItem("itWeb", itWeb);
 
       showAlert(
         "Informações guardadas e sincronizadas com sucesso em todos os links!",
@@ -695,14 +668,14 @@ export default function SistemaView({
               collName === "users" &&
               document.data().role === "Administrador" &&
               (document.data().name === "Franzíssi Tripalonga" ||
-                document.data().name === "SLAITER TRIPAS")
+                document.data().name === "Slaiter Tripas")
             ) {
               continue;
             }
             if (
               collName === "colaboradores" &&
               (document.data().nome === "Franzíssi Tripalonga" ||
-                document.data().nome === "SLAITER TRIPAS")
+                document.data().nome === "Slaiter Tripas")
             ) {
               continue;
             }
@@ -880,8 +853,8 @@ export default function SistemaView({
                 <button
                   onClick={async () => {
                     const result = await firestoreService.initializeAdmin({
-                      name: ownerName || "SLAITER TRIPAS",
-                      email: itEmail || "fttripas@gmail.com",
+                      name: ownerName || "Slaiter Tripas",
+                      email: itEmail || "slaitertripas@gmail.com",
                       nuit: user?.nuit || "108164611",
                       password: adminPassword || "231383",
                       whatsapp: itWhatsapp || "+258 84 9547771",
@@ -1127,8 +1100,7 @@ export default function SistemaView({
         );
       case "Projeto Teórico":
         return (
-          <MonografiaView
-            title="Projeto Teórico"
+          <ProjetoTeoricoView
             onBack={() => setActiveItem("Sobre o Sistema")}
           />
         );
@@ -1428,14 +1400,14 @@ export default function SistemaView({
                     collName === "users" &&
                     document.data().role === "Administrador" &&
                     (document.data().name === "Franzíssi Tripalonga" ||
-                      document.data().name === "SLAITER TRIPAS")
+                      document.data().name === "Slaiter Tripas")
                   ) {
                     continue;
                   }
                   if (
                     collName === "colaboradores" &&
                     (document.data().nome === "Franzíssi Tripalonga" ||
-                      document.data().nome === "SLAITER TRIPAS")
+                      document.data().nome === "Slaiter Tripas")
                   ) {
                     continue;
                   }

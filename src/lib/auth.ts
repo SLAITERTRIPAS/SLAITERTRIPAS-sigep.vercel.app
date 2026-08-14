@@ -15,6 +15,20 @@ export const isStructuredDept = (deptName: string) => {
   return !UNSTRUCTURED_DEPTS.includes(deptName);
 };
 
+export const isChefeDPEPUser = (user: any): boolean => {
+  if (!user) return false;
+  const role = String(user.role || "").toLowerCase();
+  const title = String(user.title || "").toLowerCase();
+  const cargo = String(user.cargo || "").toLowerCase();
+  const cargoChefia = String(user.cargoChefia || "").toLowerCase();
+  const combined = `${role} ${title} ${cargo} ${cargoChefia}`;
+
+  const isChefe = combined.includes("chefe") || combined.includes("diretor") || combined.includes("director");
+  const isDPEP = combined.includes("dpep") || combined.includes("planificação") || combined.includes("planificacao");
+
+  return isChefe && isDPEP;
+};
+
 export const isDPEPUser = (user: any): boolean => {
   if (!user) return false;
   if (isSuperBossUser(user)) return true;
@@ -90,14 +104,26 @@ export const canAccessArea = (
 ) => {
   if (!user) return false;
   
-  // Super Boss, Admin e DPEP (Departamento de Planificação) possuem soberania total sobre todas as áreas
-  if (isSuperBossUser(user) || isDPEPUser(user)) {
+  if (isSuperBossUser(user) || isChefeDPEPUser(user)) {
     return true;
   }
 
   const roles = getRoles(user.title || user.cargo || user.cargoChefia || user.role || "");
   // DG (Diretor Geral) tem acesso institucional total
   if (roles.isDG) {
+    return true;
+  }
+
+  const isTechDPEP = isDPEPUser(user) && !isChefeDPEPUser(user);
+  if (isTechDPEP) {
+    const s = String(targetSector || "").toLowerCase();
+    const d = String(targetDept || "").toLowerCase();
+    if (s.includes("relatorio") || s.includes("relatório") || d.includes("chefe do departamento")) {
+      return false;
+    }
+  }
+
+  if (isDPEPUser(user)) {
     return true;
   }
 
@@ -173,8 +199,18 @@ export const getAuthorizedActivities = (activities: any[], user: any) => {
 
   // Órgão Máximo de Planificação e Direção Geral (Diretor Geral, SuperBoss, Admin, DPEP)
   // Eles possuem acesso soberano institucional. Diretores de Direção/Departamentos vêem estritamente o seu setor.
-  if (isSysAdmin || roles.isDG || isSuperBossUser(user) || isDPEPUser(user)) {
+  if (isSysAdmin || roles.isDG || isSuperBossUser(user) || isChefeDPEPUser(user)) {
     return activities;
+  }
+
+  if (isDPEPUser(user)) {
+    return activities.filter(a => {
+      const aSector = String(a?.setor || a?.reparticao || "").toLowerCase();
+      if (aSector.includes("relatorio") || aSector.includes("relatório")) {
+        return false;
+      }
+      return true;
+    });
   }
 
   const uEmail = String(user.email || "").toLowerCase();
@@ -343,6 +379,7 @@ export const isSuperBossUser = (user: any) => {
     role === "administrador" ||
     role === "administrador do sistema" ||
     role === "administrador de sistema" ||
+    role.includes("acesso soberano") ||
     role === "proprietario" ||
     role === "proprietário" ||
     user.isOwner === true ||
@@ -366,9 +403,6 @@ export const isSuperBossUser = (user: any) => {
     user.cargo === "Administrador e Proprietario do Sistema"
   )
     return true;
-
-  const uNuit = (user.nuit || "").toString();
-  if (uNuit === "108164611") return true;
 
   const lowName = (user.name || user.nome || "").toLowerCase();
   if (lowName.includes("slaiter")) return true;

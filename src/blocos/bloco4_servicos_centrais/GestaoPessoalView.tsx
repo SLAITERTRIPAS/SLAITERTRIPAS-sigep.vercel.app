@@ -1231,6 +1231,10 @@ export default function GestaoPessoalView({
       selectedColaborador.tipo = resolvedTipo as any;
       selectedColaborador.carreira = resolvedTipo;
 
+      const hasChefia = hasChefiaPosition(selectedColaborador);
+      const isAdministrador = selectedColaborador.role === "Administrador do Sistema";
+      selectedColaborador.tipoUsuario = isAdministrador ? "Administrador do Sistema" : hasChefia ? "Chefia" : "Usuário Comum";
+
       const { id, ...updateData } = selectedColaborador;
 
       let safeId = selectedColaborador.numeroProcesso || id;
@@ -1396,6 +1400,30 @@ export default function GestaoPessoalView({
             }
           } catch (delErr) {
             // Ignore if not present
+          }
+        }
+
+        // Sincronizar Permissões com a Coleção de Usuários (Promoção a Administrador)
+        if (selectedColaborador.email) {
+          try {
+            const allUsers = await firestoreService.users.get();
+            const matchingUser = allUsers.find(u => 
+              String(u.email || "").toLowerCase() === String(selectedColaborador.email).toLowerCase()
+            );
+            if (matchingUser) {
+              const newRole = selectedColaborador.role || "Usuário Normal";
+              const newTipoUsuario = selectedColaborador.tipoUsuario || "Usuário Comum";
+              // Se o colaborador foi promovido ou despromovido
+              if (matchingUser.role !== newRole || matchingUser.tipoUsuario !== newTipoUsuario) {
+                await firestoreService.users.update(matchingUser.id, { 
+                  role: newRole,
+                  tipoUsuario: newTipoUsuario,
+                  updatedAt: new Date().toISOString()
+                });
+              }
+            }
+          } catch (userSyncErr) {
+            console.error("Erro ao sincronizar permissões do usuário:", userSyncErr);
           }
         }
 
@@ -6277,9 +6305,10 @@ export default function GestaoPessoalView({
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-[10px] font-bold text-gray-700 mb-1 tracking-tight">
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-700 mb-1 tracking-tight">
                             Repartição / Secção
                           </label>
                           <select
@@ -6339,7 +6368,6 @@ export default function GestaoPessoalView({
                                 {s}
                               </option>
                             ))}
-                            {/* Fallback fixed options if no sectors defined for reparticao */}
                             {!SECTORES[
                               selectedColaborador.reparticao as keyof typeof SECTORES
                             ] && (
@@ -6355,6 +6383,53 @@ export default function GestaoPessoalView({
                           </select>
                         </div>
                       </div>
+                      
+                      {/* Setores Adicionais para Técnicos (CTA) */}
+                      {(selectedColaborador.tipo === "CTA" || (selectedColaborador.cargo || "").toLowerCase().includes("técnico") || (selectedColaborador.cargo || "").toLowerCase().includes("tecnico")) && (
+                        <div className="mt-4 pt-4 border-t border-gray-100">
+                          <label className="block text-[10px] font-bold text-gray-700 mb-2 tracking-tight uppercase">
+                            SETORES / SECÇÕES ADICIONAIS DO DEPARTAMENTO ({selectedColaborador.departamento || "Selecione o Departamento"})
+                          </label>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {[0, 1, 2, 3].map((idx) => {
+                              const dept = selectedColaborador.departamento;
+                              const options = dept && REPARTICOES[dept as keyof typeof REPARTICOES]
+                                ? REPARTICOES[dept as keyof typeof REPARTICOES]
+                                : (dept && SECTORES[dept as keyof typeof SECTORES]
+                                    ? SECTORES[dept as keyof typeof SECTORES]
+                                    : Array.from(new Set([...Object.values(REPARTICOES).flat(), ...Object.values(SECTORES).flat()])));
+                              return (
+                                <select
+                                  key={`extra-setor-${idx}`}
+                                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none bg-white font-medium h-11 text-sm"
+                                  value={(selectedColaborador.setoresAtribuidos || [])[idx] || ""}
+                                  onChange={(e) => {
+                                    const currentSetores = selectedColaborador.setoresAtribuidos || ["", "", "", ""];
+                                    // Make sure we have 4 elements
+                                    const newSetores = [...currentSetores];
+                                    while(newSetores.length < 4) newSetores.push("");
+                                    newSetores[idx] = e.target.value;
+                                    setSelectedColaborador({
+                                      ...selectedColaborador,
+                                      setoresAtribuidos: newSetores
+                                    });
+                                  }}
+                                >
+                                  <option value="">Selecione...</option>
+                                  {options.map((s) => (
+                                    <option key={s} value={s}>
+                                      {s}
+                                    </option>
+                                  ))}
+                                  <option value="Serviços Gerais">Serviços Gerais</option>
+                                  <option value="Administrativo">Administrativo</option>
+                                </select>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      </>
                     )}
                   </div>
 
@@ -6788,6 +6863,44 @@ export default function GestaoPessoalView({
                   </div>
                 </div>
 
+                {/* Secção 6: PERMISSÕES DE SISTEMA */}
+                {isSuperBossUser(user) && (
+                  <div className="border border-black rounded-[2rem] p-8 space-y-6 relative">
+                    <div className="absolute -top-3 left-6 bg-white px-4 flex items-center gap-2">
+                      <div className="w-1 h-4 bg-purple-600 rounded-full"></div>
+                      <h3 className="text-[10px] font-black text-purple-900 tracking-[0.2em]">
+                        Permissões de Sistema
+                      </h3>
+                    </div>
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-bold text-gray-700 mb-1 tracking-tight">
+                          Privilégios de Acesso
+                        </label>
+                        <select
+                          className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 transition-all outline-none bg-white font-black h-11 text-purple-700"
+                          value={selectedColaborador.role || "Usuário Normal"}
+                          onChange={(e) =>
+                            setSelectedColaborador({
+                              ...selectedColaborador,
+                              role: e.target.value,
+                            })
+                          }
+                        >
+                          <option value="Usuário Normal">Usuário Normal</option>
+                          <option value="Administrador do Sistema">
+                            Administrador do Sistema
+                          </option>
+                        </select>
+                        <p className="mt-2 text-[8px] font-medium text-gray-400 uppercase tracking-widest">
+                          * O Administrador tem acesso total a todas as áreas e
+                          dados do sistema.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex justify-end gap-4 mt-8">
                   <button
                     type="button"
@@ -6851,6 +6964,7 @@ export default function GestaoPessoalView({
       return (
         <div key={formKey} className="h-full">
           <IndividualProcessForm
+            user={user}
             colaboradores={colaboradores}
             history={processos}
             activities={matrixActivities}

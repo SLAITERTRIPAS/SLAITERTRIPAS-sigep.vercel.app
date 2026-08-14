@@ -2,6 +2,9 @@ import React from "react";
 import { motion } from "motion/react";
 import { FileText, Download, ArrowLeft, Printer } from "lucide-react";
 import { openPrintDocumentWindow } from "../../lib/printUtils";
+import { InstitutionalHeader } from "../../components/InstitutionalHeader";
+import { OfficialDocumentSignatures } from "../../components/OfficialDocumentSignatures";
+import { DocumentToolbarActions } from "../../components/DocumentToolbarActions";
 
 interface ReportSection {
   title: string;
@@ -41,8 +44,6 @@ interface StandardReportModelProps {
   onBack: () => void;
   user?: any;
 }
-
-import { InstitutionalHeader } from "../../components/InstitutionalHeader";
 
 export default function StandardReportModel({
   direction,
@@ -196,23 +197,30 @@ export default function StandardReportModel({
     );
   };
 
+  const isDPEP =
+    direction?.toUpperCase().includes("DPEP") ||
+    direction?.toUpperCase().includes("PLANIFICA") ||
+    user?.departamento?.toUpperCase().includes("DPEP") ||
+    user?.direcao?.toUpperCase().includes("DPEP");
+
   return (
     <div className="min-h-screen bg-slate-200 p-4 md:p-12 print:p-0 print:bg-white font-serif">
       {/* Toolbar - Hidden on print */}
-      <div className="max-w-[21cm] mx-auto mb-8 flex items-center justify-between print:hidden">
+      <div className="max-w-[21cm] mx-auto mb-8 flex flex-wrap items-center justify-between gap-4 print:hidden">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 bg-white text-blue-900 px-4 py-2 rounded-xl font-bold hover:bg-gray-50 transition-all shadow-sm border border-gray-200"
+          className="flex items-center gap-2 bg-white text-blue-900 px-4 py-2.5 rounded-xl font-bold hover:bg-gray-50 transition-all shadow-sm border border-gray-200 text-xs"
         >
-          <ArrowLeft size={20} /> Voltar
+          <ArrowLeft size={18} /> Voltar
         </button>
-        <div className="flex gap-4">
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-2 bg-blue-900 text-white px-8 py-3 rounded-xl font-black hover:bg-blue-800 transition-all shadow-xl hover:scale-105 active:scale-95"
-          >
-            <Printer size={18} /> IMPRIMIR RELATÓRIO (A4)
-          </button>
+        <div className="flex items-center gap-3">
+          <DocumentToolbarActions
+            title={title}
+            onPrint={handlePrint}
+            onImport={(data, file) => {
+              alert(`Dados do ficheiro "${file.name}" importados para o relatório com sucesso!`);
+            }}
+          />
         </div>
       </div>
 
@@ -356,12 +364,10 @@ export default function StandardReportModel({
                       • Centro de Incubação de Empresas (CIE)
                     </p>
                     <p className="font-medium">
-                      • Direção de Coordenação de Serviços Académicos, Sociais,
-                      Extensão e Relações Públicas (DICOSSER)
+                      • Direção de coordenação de serviços estudantis e registo (DICOSSER)
                     </p>
                     <p className="font-medium">
-                      • Direção de Coordenação de Serviços de Administração,
-                      Finanças e de Apoio (DICOSAFA)
+                      • Direção de coordenação de serviços administrativos e finanças (DICOSAFA)
                     </p>
                     <p className="font-medium">
                       • Gabinete do Diretor-Geral (GDG)
@@ -558,6 +564,19 @@ export default function StandardReportModel({
             <div className="text-justify leading-[1.8] space-y-6 text-base text-slate-800 whitespace-pre-wrap font-sans">
               {section.content}
             </div>
+
+            {/* Assinaturas Oficiais na última página do relatório */}
+            {idx === sections.length - 1 && (
+              <div className="mt-12 pt-6">
+                <OfficialDocumentSignatures
+                  isDPEP={isDPEP}
+                  user={user}
+                  diretorRole={direction ? `DIRETOR (${direction.toUpperCase()})` : undefined}
+                  editable={true}
+                  date={new Date().toLocaleDateString("pt-MZ")}
+                />
+              </div>
+            )}
 
             {/* Page Footer */}
             <div className="absolute bottom-10 left-[2.5cm] right-[2.5cm] flex justify-between items-center text-[10px] text-slate-400 font-sans tracking-widest border-t border-slate-50 pt-4">

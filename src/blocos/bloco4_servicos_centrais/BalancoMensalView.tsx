@@ -62,18 +62,14 @@ export default function BalancoMensalView({
   onBack,
 }: BalancoMensalViewProps) {
   // Local state for uploaded logo
-  const [logoImage, setLogoImage] = useState<string | null>(() => {
-    return (
-      localStorage.getItem("isps_balanco_logo") ||
-      "https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad"
-    );
-  });
+  const [logoImage, setLogoImage] = useState<string | null>(
+    "https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad"
+  );
 
   useEffect(() => {
     const unsub = firestoreService.subscribeToDocument<any>("balanco_config", "main_balanco", (docData) => {
       if (docData && docData.logo) {
         setLogoImage(docData.logo);
-        localStorage.setItem("isps_balanco_logo", docData.logo);
       }
     });
     return () => unsub();
@@ -97,7 +93,6 @@ export default function BalancoMensalView({
       reader.onloadend = async () => {
         const base64String = reader.result as string;
         setLogoImage(base64String);
-        localStorage.setItem("isps_balanco_logo", base64String);
         try {
           await firestoreService.balancoConfig.set("main_balanco", {
             logo: base64String,
@@ -114,7 +109,6 @@ export default function BalancoMensalView({
   const handleClearLogo = async () => {
     const defaultLogo = "https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad";
     setLogoImage(defaultLogo);
-    localStorage.removeItem("isps_balanco_logo");
     try {
       await firestoreService.balancoConfig.set("main_balanco", {
         logo: defaultLogo,

@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { firestoreService } from "../../lib/firestoreService";
 import SignatureUpload from "../bloco5_sistema/SignatureUpload";
+import { ISPSLogo } from "../../components/InstitutionAssets";
+import { OfficialDocumentSignatures } from "../../components/OfficialDocumentSignatures";
 
 interface ColaboradorApresentacao {
   nomeColaborador: string;
@@ -203,12 +205,9 @@ export default function GuiaApresentacaoInterna({
         {/* Cabeçalho do Documento */}
         <div>
           <div className="flex items-center justify-center gap-4 border-b border-slate-300 pb-4 mb-8">
-            <img
-              src="https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad"
-              alt="Logo ISPS"
-              className="w-16 h-16 object-contain"
-              referrerPolicy="no-referrer"
-            />
+            <div className="w-16 h-16 flex items-center justify-center">
+              <ISPSLogo className="w-full h-full object-contain" alt="Logo ISPS" />
+            </div>
             <div className="text-left font-sans">
               <h1 className="text-sm font-black tracking-tight text-slate-800 uppercase leading-tight">
                 INSTITUTO SUPERIOR POLITÉCNICO DE SONGO
@@ -416,37 +415,12 @@ export default function GuiaApresentacaoInterna({
             />
           </div>
 
-          {/* Bloco de Assinatura */}
-          <div className="text-center pt-8 max-w-sm mx-auto flex flex-col items-center">
-            <p className="font-bold uppercase tracking-wide text-[10px] font-sans text-slate-500 mb-2">
-              O Chefe do Departamento
-            </p>
-            <div className="w-64">
-              <SignatureUpload
-                label=""
-                value={formData.assinaturaChefe}
-                onChange={(val) =>
-                  setFormData((prev) => ({ ...prev, assinaturaChefe: val }))
-                }
-                user={user}
-              />
-            </div>
-
-            <input
-              type="text"
-              value={formData.nomeChefe}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, nomeChefe: e.target.value }))
-              }
-              className="w-80 text-center font-bold text-slate-900 border-b border-dashed border-transparent hover:border-slate-300 focus:border-blue-500 bg-transparent outline-none py-0.5 mt-1"
-            />
-            <input
-              type="text"
-              value={formData.cargoChefe}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, cargoChefe: e.target.value }))
-              }
-              className="w-80 text-center text-xs text-slate-500 font-bold uppercase tracking-wider border-b border-dashed border-transparent hover:border-slate-300 focus:border-blue-500 bg-transparent outline-none py-0.5 mt-1"
+          {/* Assinaturas Oficiais Oficiais */}
+          <div className="mt-12 pt-6">
+            <OfficialDocumentSignatures
+              user={user}
+              editable={true}
+              date={new Date().toLocaleDateString("pt-MZ")}
             />
           </div>
 

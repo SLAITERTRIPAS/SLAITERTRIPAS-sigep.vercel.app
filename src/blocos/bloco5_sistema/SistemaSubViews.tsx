@@ -27,7 +27,6 @@ import {
 import { collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { firestoreService } from "../../lib/firestoreService";
-import { db } from "../../lib/firebase";
 import { isSuperBossUser } from "../../lib/auth";
 import { ProcessingCircle } from "../../components/ui/ProcessingCircle";
 import { openPrintDocumentWindow } from "../../lib/printUtils";

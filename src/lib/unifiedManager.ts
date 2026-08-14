@@ -123,43 +123,41 @@ export function toSingularProductName(name: string): string {
   return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
-export function getDeletedProductKeys(): Set<string> {
-  try {
-    const saved = localStorage.getItem("sigep_deleted_products");
-    if (saved) {
-      const arr: string[] = JSON.parse(saved);
-      return new Set(arr.map((k) => k.trim().toLowerCase()));
-    }
-  } catch (e) {
-    console.error("Error reading deleted products:", e);
-  }
-  return new Set();
-}
-
 export async function deleteUnifiedProduct(nome: string) {
   try {
     const singularName = toSingularProductName(nome);
     const key = singularName.trim().toLowerCase();
     const docId = `prod_${key}`.replace(/[^a-zA-Z0-9_]/g, "_");
     
-    // Remover imediatamente e definitivamente da base de dados Firestore
+    // Remover definitivamente da base de dados Firestore
     await firestoreService.produtosUnificados.delete(docId);
 
-    const saved = localStorage.getItem("sigep_unified_products");
-    if (saved) {
-      const parsed: UnifiedProduct[] = JSON.parse(saved);
-      const filtered = parsed.filter((p) => toSingularProductName(p.nome).trim().toLowerCase() !== key);
-      localStorage.setItem("sigep_unified_products", safeJSONStringify(filtered));
-    }
+    // Adicionar à lista de eliminados no Firestore (para esconder produtos base)
+    const deletedConfig = (await firestoreService.config.get("deleted_products")) as any || { list: [] };
+    const newList = Array.from(new Set([...(deletedConfig.list || []), key]));
+    await firestoreService.config.set("deleted_products", { list: newList });
+
   } catch (e) {
     console.error("Error deleting product from database:", e);
     throw e;
   }
 }
 
+export async function getDeletedProductKeys(): Promise<Set<string>> {
+  try {
+    const deletedConfig = (await firestoreService.config.get("deleted_products")) as any;
+    if (deletedConfig && deletedConfig.list) {
+      return new Set(deletedConfig.list.map((k: string) => k.trim().toLowerCase()));
+    }
+  } catch (e) {
+    console.error("Error reading deleted products from cloud:", e);
+  }
+  return new Set();
+}
+
 export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
   const map = new Map<string, UnifiedProduct>();
-  const deletedKeys = getDeletedProductKeys();
+  const deletedKeys = await getDeletedProductKeys();
 
   // 1. Fetch from Firestore (Gestão de Produtos e Preços)
   try {
@@ -217,7 +215,7 @@ export async function getUnifiedProducts(): Promise<UnifiedProduct[]> {
 export async function deduplicateDatabaseProducts(): Promise<{ totalUnique: number; duplicatesRemoved: number }> {
   try {
     const remoteProducts = await firestoreService.produtosUnificados.get();
-    const deletedKeys = getDeletedProductKeys();
+    const deletedKeys = await getDeletedProductKeys();
 
     const groups = new Map<string, any[]>();
     remoteProducts.forEach((doc: any) => {
@@ -304,8 +302,6 @@ export async function deduplicateDatabaseProducts(): Promise<{ totalUnique: numb
       });
     });
 
-    localStorage.setItem("sigep_unified_products", safeJSONStringify(cleanList));
-
     return {
       totalUnique: cleanList.length,
       duplicatesRemoved,
@@ -325,15 +321,12 @@ export async function saveUnifiedProduct(product: { nome: string; preco: number;
       ? toSingularProductName(product.originalNome).trim().toLowerCase()
       : key;
 
-    // If previously deleted, remove from deleted list
-    const deletedKeys = getDeletedProductKeys();
-    if (deletedKeys.has(key)) {
+    // If previously deleted, remove from deleted list in cloud
+    const deletedKeys = await getDeletedProductKeys();
+    if (deletedKeys.has(key) || (oldKey !== key && deletedKeys.has(oldKey))) {
       deletedKeys.delete(key);
-      localStorage.setItem("sigep_deleted_products", safeJSONStringify(Array.from(deletedKeys)));
-    }
-    if (oldKey !== key && deletedKeys.has(oldKey)) {
-      deletedKeys.delete(oldKey);
-      localStorage.setItem("sigep_deleted_products", safeJSONStringify(Array.from(deletedKeys)));
+      if (oldKey !== key) deletedKeys.delete(oldKey);
+      await firestoreService.config.set("deleted_products", { list: Array.from(deletedKeys) });
     }
 
     const index = current.findIndex(
@@ -357,15 +350,6 @@ export async function saveUnifiedProduct(product: { nome: string; preco: number;
       categoria: categoria,
       updatedAt: new Date().toISOString(),
     };
-
-    let newList = [...current];
-    if (index >= 0) {
-      newList[index] = updatedProduct;
-    } else {
-      newList.push(updatedProduct);
-    }
-
-    localStorage.setItem("sigep_unified_products", safeJSONStringify(newList));
 
     const docId = `prod_${key}`.replace(/[^a-zA-Z0-9_]/g, "_");
     await firestoreService.produtosUnificados.set(docId, updatedProduct);
@@ -559,16 +543,7 @@ export function getDepartmentStoredActivities(departmentName: string): any[] {
     });
   }
 
-  // 2. Fallback para localStorage apenas se a nuvem estiver vazia
-  try {
-    const saved = localStorage.getItem(`sigep_dept_activities_${deptKey}`);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed : [];
-    }
-  } catch (e) {
-    console.error("Error loading dept activities:", e);
-  }
+  // 2. Não há fallback para localStorage. Se não está na nuvem, não existe.
   return [];
 }
 
@@ -605,9 +580,6 @@ export function saveDepartmentActivity(departmentName: string, activityData: any
       return true;
     });
 
-    filtered.unshift(activityData);
-    localStorage.setItem(`sigep_dept_activities_${deptKey}`, safeJSONStringify(filtered));
-
     // Guardar diretamente na base de dados cloud (Firestore)
     if (activityData) {
       const payload = {
@@ -617,11 +589,11 @@ export function saveDepartmentActivity(departmentName: string, activityData: any
         updatedAt: new Date().toISOString(),
       };
       if (activityData.id && !String(activityData.id).startsWith("local_")) {
-        firestoreService.updateInCollection("actividades", activityData.id, payload).catch((err) => {
+        firestoreService.actividades.update(activityData.id, payload).catch((err) => {
           console.warn("Aviso ao atualizar atividade no Firestore:", err);
         });
       } else {
-        firestoreService.addToCollection("actividades", payload).catch((err) => {
+        firestoreService.actividades.add(payload).catch((err) => {
           console.warn("Aviso ao adicionar atividade no Firestore:", err);
         });
       }

@@ -16,7 +16,7 @@ import BookRegistrationForm from "../bloco3_unidades_organicas/BookRegistrationF
 import ArchiveView from "../bloco5_sistema/ArchiveView";
 
 import { LibraryRegistration, BookRegistration } from "../../types";
-import { isSuperBossUser, isPatrimonioBossOrAdmin } from "../../lib/auth";
+import { isSuperBossUser, isPatrimonioBossOrAdmin, isDPEPUser, isChefeDPEPUser } from "../../lib/auth";
 import MainHeader from "../bloco1_apresentacao/MainHeader";
 
 export default function SubMenu({
@@ -326,7 +326,15 @@ export default function SubMenu({
       ? greenColors
       : defaultColors;
 
-  const isAllowed = (_item: any) => {
+  const isAllowed = (item: any) => {
+    if (!user) return true;
+    const itemTitle = String(item?.title || "").toLowerCase();
+    const isTechDPEP = isDPEPUser(user) && !isChefeDPEPUser(user);
+    if (isTechDPEP) {
+      if (itemTitle.includes("relatorio") || itemTitle.includes("relatório") || itemTitle.includes("chefe do departamento")) {
+        return false;
+      }
+    }
     return true;
   };
 

@@ -8,6 +8,7 @@ import {
   UNIDADES_ORGANICAS_SISTEMA,
   DEPARTAMENTOS,
   REPARTICOES,
+  SECTORES,
   LISTA_CARGOS_CHEFIA,
   LISTA_FUNCOES,
   ESTADOS_CIVIS,
@@ -23,7 +24,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { isSuperBossUser } from "../../lib/auth";
 import { formatProcessNumber } from "../../lib/utils";
 
-import { withTimeout, generateCollaboratorId } from "../../lib/utils";
+import { withTimeout, generateCollaboratorId, hasChefiaPosition } from "../../lib/utils";
 
 export default function SystemRegistrationForm({
   onCancel,
@@ -81,9 +82,11 @@ export default function SystemRegistrationForm({
   const [departamento, setDepartamento] = useState("");
   const [reparticao, setReparticao] = useState("");
   const [cargo, setCargo] = useState("");
+  const [role, setRole] = useState("Usuário Normal");
   const [funcao, setFuncao] = useState("");
   const [anoInicio, setAnoInicio] = useState("");
   const [nivelAcademico, setNivelAcademico] = useState("");
+  const [setoresAtribuidos, setSetoresAtribuidos] = useState<string[]>(["", "", ""]);
 
   // Mandato Fields
   const [mandatoStatus, setMandatoStatus] = useState("Ativo");
@@ -149,6 +152,7 @@ export default function SystemRegistrationForm({
           if (data.departamento) setDepartamento(data.departamento);
           if (data.reparticao) setReparticao(data.reparticao);
           if (data.cargo) setCargo(data.cargo);
+          if (data.role) setRole(data.role);
           if (data.funcao) setFuncao(data.funcao);
           if (data.nivelAcademico) setNivelAcademico(data.nivelAcademico);
 
@@ -529,7 +533,7 @@ export default function SystemRegistrationForm({
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-[#000066] tracking-widest">
-                      Repartição
+                      Repartição Principal
                     </label>
                     <select
                       className="w-full px-4 py-3 bg-white border-none rounded shadow-sm text-sm font-medium outline-none focus:ring-2 focus:ring-blue-900 appearance-none"
@@ -549,6 +553,45 @@ export default function SystemRegistrationForm({
                   </div>
                 </div>
 
+                {/* Setores Adicionais para Técnicos (CTA) */}
+                {(categoria === "CTA" || cargo.toLowerCase().includes("técnico") || cargo.toLowerCase().includes("tecnico")) && (
+                  <div className="grid grid-cols-1 gap-6 pt-2">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-[#000066] tracking-widest uppercase">
+                        Repartições / Setores Adicionais de Alocação do Departamento ({departamento || "Selecione o Departamento"})
+                      </label>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {[0, 1, 2, 3].map((idx) => {
+                          const deptOptions = departamento && REPARTICOES[departamento as keyof typeof REPARTICOES]
+                            ? REPARTICOES[departamento as keyof typeof REPARTICOES]
+                            : (departamento && SECTORES[departamento as keyof typeof SECTORES]
+                                ? SECTORES[departamento as keyof typeof SECTORES]
+                                : Object.values(REPARTICOES).flat());
+                          return (
+                            <select
+                              key={`extra-rep-${idx}`}
+                              className="w-full px-4 py-3 bg-white border-none rounded shadow-sm text-sm font-medium outline-none focus:ring-2 focus:ring-blue-900 appearance-none"
+                              value={setoresAtribuidos[idx] || ""}
+                              onChange={(e) => {
+                                const newSetores = [...setoresAtribuidos];
+                                newSetores[idx] = e.target.value;
+                                setSetoresAtribuidos(newSetores);
+                              }}
+                            >
+                              <option value="">Selecione...</option>
+                              {deptOptions.map((r) => (
+                                <option key={r} value={r}>
+                                  {r}
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-[#000066] tracking-widest">
@@ -561,9 +604,14 @@ export default function SystemRegistrationForm({
                     >
                       <option value="">Selecione...</option>
                       {(isFirstUserAccount || isOwner) && (
-                        <option value="Administrador do Sistema">
-                          Administrador do Sistema
-                        </option>
+                        <>
+                          <option value="Administrador do Sistema">
+                            Administrador do Sistema
+                          </option>
+                          <option value="Administrador do Sistema (Acesso Soberano)">
+                            Administrador do Sistema (Acesso Soberano)
+                          </option>
+                        </>
                       )}
                       {LISTA_CARGOS_CHEFIA.map((c) => (
                         <option key={c} value={c}>
@@ -808,7 +856,8 @@ export default function SystemRegistrationForm({
                   }
 
                   const isFirstUser = isFirstUserAccount && !isUpdate;
-                  const isAdministrador = cargo === "Administrador do Sistema";
+                  const isAdministrador = cargo.includes("Administrador do Sistema") || role === "Administrador do Sistema";
+                  const hasChefia = hasChefiaPosition({ cargo, funcao });
 
                   const unidadeNome =
                     UNIDADES_ORGANICAS_SISTEMA.find(
@@ -819,7 +868,8 @@ export default function SystemRegistrationForm({
                   const userData: any = {
                     name: nome,
                     email: emailInstitucional.toLowerCase().trim(),
-                    role: isAdministrador ? "Administrador" : "User",
+                    role: isAdministrador ? "Administrador do Sistema" : "Usuário Normal",
+                    tipoUsuario: isAdministrador ? "Administrador do Sistema" : hasChefia ? "Chefia" : "Usuário Comum",
                     isOwner: isUpdate
                       ? existingUserDoc?.data()?.isOwner || false
                       : isFirstUser && isAdministrador,
@@ -834,7 +884,7 @@ export default function SystemRegistrationForm({
                     userData.mustChangePassword = false;
                   }
 
-                  const colaboradorData = {
+                  const colaboradorData: any = {
                     id: collabId,
                     numeroProcesso: collabId,
                     nome: nome,
@@ -846,10 +896,12 @@ export default function SystemRegistrationForm({
                     funcao: funcao,
                     email: emailInstitucional,
                     tipo: categoria,
+                    tipoUsuario: hasChefia ? "Chefia" : "Usuário Comum",
                     unidade: unidadeNome,
                     direcao: direcao,
                     departamento: departamento,
                     reparticao: reparticao,
+                    setoresAtribuidos: setoresAtribuidos.filter(s => s.trim() !== ""),
                     cargo: cargo || "",
                     status: "Ativo",
                     mandatoStatus: mandatoStatus,

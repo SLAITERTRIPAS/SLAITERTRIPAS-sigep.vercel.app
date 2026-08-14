@@ -47,7 +47,7 @@ export default function MonografiaView({
   );
   const [isSaving, setIsSaving] = useState(false);
 
-  const [authorName, setAuthorName] = useState("SLAITER TRIPAS");
+  const [authorName, setAuthorName] = useState("Slaiter Tripas");
   const [monoTitle, setMonoTitle] = useState(
     "SIGEP: Sistema integrado de gestão de processos do Instituto Superior Politécnico de Songo (ISPS)",
   );
@@ -78,13 +78,6 @@ export default function MonografiaView({
           setAgradecimentosText(doc.agradecimentosText);
         if (doc.resumoText) setResumoText(doc.resumoText);
         if (doc.abstractText) setAbstractText(doc.abstractText);
-      } else {
-        // Fallback to localStorage for migration
-        const savedAuthor = localStorage.getItem("mono_authorName");
-        if (savedAuthor) setAuthorName(savedAuthor);
-        const savedTitle = localStorage.getItem("mono_title");
-        if (savedTitle) setMonoTitle(savedTitle);
-        // ... other fallbacks if needed, but the defaults are already in state
       }
     });
 
@@ -104,15 +97,6 @@ export default function MonografiaView({
         abstractText,
         updatedAt: new Date().toISOString(),
       });
-
-      // Update local storage too for redundancy
-      localStorage.setItem("mono_authorName", authorName);
-      localStorage.setItem("mono_title", monoTitle);
-      localStorage.setItem("mono_orientador", orientador);
-      localStorage.setItem("mono_dedicatoria_v3", dedicatoriaText);
-      localStorage.setItem("mono_agradecimentos", agradecimentosText);
-      localStorage.setItem("mono_resumo_v3", resumoText);
-      localStorage.setItem("mono_abstract", abstractText);
 
       setIsUpdated(true);
       setTimeout(() => setIsUpdated(false), 3000);
@@ -1429,7 +1413,7 @@ export default function MonografiaView({
               </div>
               <div className="mt-4 pt-2 border-t border-gray-50 flex items-center justify-between">
                 <span className="text-[8px] font-black text-gray-300 italic">
-                  Dev: SLAITER TRIPAS
+                  Dev: Slaiter Tripas
                 </span>
                 <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[8px] font-bold">
                   v{systemData?.version || "2.0"}
@@ -1575,7 +1559,7 @@ export default function MonografiaView({
                   value={authorName}
                   onChange={(e) => setAuthorName(e.target.value)}
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all text-slate-800"
-                  placeholder="Ex: SLAITER TRIPAS"
+                  placeholder="Ex: Slaiter Tripas"
                 />
               </div>
 

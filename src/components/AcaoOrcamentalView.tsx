@@ -84,22 +84,35 @@ export function getParentRubrica(rubricaRaw?: string): string {
   const codeMatch = clean.match(/^(\d{2,6})/);
   const code = codeMatch ? codeMatch[1] : "";
 
-  if (code.startsWith("11") || clean.includes("ajuda") || clean.includes("diari") || clean.includes("pessoal")) {
-    return "Ajudas de Custo (Capítulo 11)";
+  if (code.startsWith("112") || clean.includes("ajuda") || clean.includes("diari") || clean.includes("pessoal")) {
+    return "DEMAIS DESPESAS COM O PESSOAL-112";
   }
-  if (code.startsWith("121") || (code.startsWith("12") && !code.startsWith("122")) || clean.includes("material") || clean.includes("bens") || clean.includes("consumo") || clean.includes("duradouro") || clean.includes("combustivel") || clean.includes("generos") || clean.includes("medicament") || clean.includes("escritorio") || clean.includes("fardamento")) {
-    return "Bens e Materiais (Capítulo 12.1)";
+  if (code.startsWith("121") || clean.includes("material") || clean.includes("bens") || clean.includes("consumo")) {
+    return "BENS - 121";
   }
-  if (code.startsWith("122") || clean.includes("servico") || clean.includes("comunicacao") || clean.includes("agua") || clean.includes("energia") || clean.includes("manutencao") || clean.includes("reparacao") || clean.includes("renda") || clean.includes("seguro") || clean.includes("limpeza")) {
-    return "Serviços (Capítulo 12.2)";
+  if (code.startsWith("122") || clean.includes("servico") || clean.includes("comunicacao") || clean.includes("manutencao")) {
+    return "SERVICOS - 122";
   }
-  if (code.startsWith("143") || clean.includes("bolsa") || clean.includes("transferencia") || clean.includes("comunidade") || clean.includes("familia")) {
-    return "Transferências e Subsídios (Capítulo 14)";
+  if (code.startsWith("143") || clean.includes("bolsa") || clean.includes("transferencia") || clean.includes("familia")) {
+    return "DEMAIS TRANSFERENCIAS A FAMILIAS 1434";
   }
+  if (code.startsWith("12") && !code.startsWith("121") && !code.startsWith("122")) {
+    return "EXERCICIOS FINDOS 12";
+  }
+  
+  // Fallback dinâmico para garantir que todas as rúbricas apareçam em categorias próprias
+  if (code) {
+    const parts = (rubricaRaw || "").split(/[-:]/);
+    const label = parts.length > 1 ? parts[1].trim().toUpperCase() : parts[0].trim().toUpperCase();
+    // Limita o tamanho do label para o card
+    const shortLabel = label.split(' ').slice(0, 4).join(' ');
+    return `${shortLabel} - ${code}`;
+  }
+
   if (clean.includes("salario") || clean.includes("vencimento") || clean.includes("remuneracao")) {
-    return "Remunerações do Pessoal";
+    return "REMUNERAÇÕES DO PESSOAL";
   }
-  return "Outras Despesas de Funcionamento";
+  return "OUTRAS DESPESAS DE FUNCIONAMENTO";
 }
 
 export function getOfficialRubricaLabel(rubricaRaw?: string, necessidadeRaw?: string): string {
@@ -1139,7 +1152,7 @@ export default function AcaoOrcamentalView({
 
   // Matriz Tabela Dinâmica Oficial SISTAFE com Códigos de Rúbricas
   const [expandedPivotRows, setExpandedPivotRows] = useState<Record<string, boolean>>({});
-  const [showOnlyNonZeroPivot, setShowOnlyNonZeroPivot] = useState<boolean>(true);
+  const [showOnlyNonZeroPivot, setShowOnlyNonZeroPivot] = useState<boolean>(false);
 
   const sistafePivotData = useMemo(() => {
     const map: Record<
@@ -1377,21 +1390,18 @@ export default function AcaoOrcamentalView({
   }, [user, title]);
 
   const docTetoId = `teto_${selectedLevel}_${selectedUnit}_${title}`.replace(/[^a-zA-Z0-9_]/g, "_");
-  const storageKey = `teto_atribuido_${selectedLevel}_${selectedUnit}_${title}`;
-  const [customTeto, setCustomTeto] = useState<number>(() => {
-    const saved = localStorage.getItem(storageKey);
-    return saved ? Number(saved) : 0;
-  });
+  const [customTeto, setCustomTeto] = useState<number>(0);
 
   useEffect(() => {
     const unsub = firestoreService.subscribeToDocument<any>("tetos_orcamentais", docTetoId, (docData) => {
       if (docData && typeof docData.valor === "number") {
         setCustomTeto(docData.valor);
-        localStorage.setItem(storageKey, String(docData.valor));
+      } else {
+        setCustomTeto(0);
       }
     });
     return () => unsub();
-  }, [docTetoId, storageKey]);
+  }, [docTetoId]);
 
   const [isEditingTeto, setIsEditingTeto] = useState(false);
   const [tempTetoInput, setTempTetoInput] = useState<string>("");
@@ -1437,7 +1447,6 @@ export default function AcaoOrcamentalView({
       return;
     }
     setCustomTeto(val);
-    localStorage.setItem(storageKey, String(val));
     setIsEditingTeto(false);
 
     try {
@@ -1637,8 +1646,11 @@ export default function AcaoOrcamentalView({
             <h2 className="text-2xl font-black text-slate-900 tracking-tight">
               Ação Orçamental
             </h2>
-            <p className="text-xs font-bold text-slate-400 tracking-wider uppercase mt-1">
-              Gabinete do {title} &bull; Gestão de Limites e Dotações
+            <p className="text-xs font-black text-blue-800 tracking-widest uppercase mt-1">
+              {title}
+            </p>
+            <p className="text-[11px] font-bold text-slate-400 tracking-wider uppercase mt-0.5">
+              Unidade / Setor: {title} &bull; Gestão de Limites e Dotações
             </p>
           </div>
         </div>
@@ -2178,7 +2190,7 @@ export default function AcaoOrcamentalView({
             <div className="bg-sky-900/5 border border-sky-200/80 p-5 rounded-3xl space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-black uppercase tracking-widest text-sky-900 flex items-center gap-2">
-                💡 Resumo Consolidado por Rúbrica (Materiais, Serviços, Ajudas de Custo)
+                💡 RESUMO CONSOLIDADO POR RÚBRICA (MATERIAIS, SERVIÇOS, AJUDAS DE CUSTO)
               </h4>
               <span className="text-[10px] font-bold text-sky-700 bg-sky-100 px-2.5 py-1 rounded-full">
                 {parentRubricasBreakdown.length} Rúbricas Mães Mapeadas
@@ -2186,48 +2198,71 @@ export default function AcaoOrcamentalView({
             </div>
 
             {parentRubricasBreakdown.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {parentRubricasBreakdown.map((rub, idx) => {
-                  const grandTotal = Math.max(
-                    totalOrcamentadoSetor,
-                    parentRubricasBreakdown.reduce((acc, curr) => acc + curr.totalValor, 0)
-                  );
-                  const pct = grandTotal > 0 ? (rub.totalValor / grandTotal) * 100 : 0;
-                  const isMaterial = rub.parentName.toLowerCase().includes("bens") || rub.parentName.toLowerCase().includes("material");
-                  const isServicos = rub.parentName.toLowerCase().includes("serviços");
-                  const isAjudas = rub.parentName.toLowerCase().includes("ajuda");
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  {parentRubricasBreakdown.map((rub, idx) => {
+                    const grandTotal = Math.max(
+                      totalOrcamentadoSetor,
+                      parentRubricasBreakdown.reduce((acc, curr) => acc + curr.totalValor, 0)
+                    );
+                    const pct = grandTotal > 0 ? (rub.totalValor / grandTotal) * 100 : 0;
+                    
+                    const name = rub.parentName;
+                    const isPessoal = name.includes("PESSOAL-112");
+                    const isBens = name.includes("BENS - 121");
+                    const isTransf = name.includes("TRANSFERENCIAS A FAMILIAS 1434");
+                    const isServicos = name.includes("SERVICOS - 122");
+                    const isExercicios = name.includes("EXERCICIOS FINDOS 12");
 
-                  return (
-                    <div
-                      key={idx}
-                      className={`p-4 rounded-2xl border transition-all ${
-                        isMaterial
-                          ? "bg-amber-500/10 border-amber-300 ring-1 ring-amber-400/20"
-                          : isServicos
-                          ? "bg-blue-500/10 border-blue-300 ring-1 ring-blue-400/20"
-                          : isAjudas
-                          ? "bg-emerald-500/10 border-emerald-300 ring-1 ring-emerald-400/20"
-                          : "bg-white border-slate-200"
-                      }`}
-                    >
-                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-700 truncate mb-1">
-                        {isMaterial ? "📦 " : isServicos ? "⚙️ " : isAjudas ? "✈️ " : "🏷️ "}
-                        {rub.parentName}
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-5 rounded-2xl border-2 transition-all flex flex-col justify-between h-full shadow-sm ${
+                          isPessoal
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                            : isBens
+                            ? "bg-amber-50 border-amber-200 text-amber-900"
+                            : isServicos
+                            ? "bg-green-500 border-green-600 text-white"
+                            : isExercicios
+                            ? "bg-sky-500 border-sky-600 text-white"
+                            : isTransf
+                            ? "bg-white border-slate-100 text-slate-900"
+                            : "bg-white border-slate-200 text-slate-900"
+                        }`}
+                      >
+                        <div className={`text-[11px] font-black uppercase tracking-widest text-center mb-4 ${
+                          isServicos || isExercicios ? "text-white/90" : "text-slate-600"
+                        }`}>
+                          {name}
+                        </div>
+                        
+                        <div className="flex flex-col items-center">
+                          <div className={`text-2xl font-black font-mono leading-tight ${
+                            isServicos || isExercicios ? "text-white" : "text-slate-900"
+                          }`}>
+                            {rub.totalValor.toLocaleString("pt-MZ", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}{" "}
+                            <span className={`text-[10px] font-sans font-normal ${
+                               isServicos || isExercicios ? "text-white/70" : "text-slate-400"
+                            }`}>MZN</span>
+                          </div>
+                        </div>
+
+                        <div className={`flex justify-between items-center text-[10px] mt-6 pt-3 border-t font-bold ${
+                          isServicos || isExercicios 
+                            ? "border-white/20 text-white/90" 
+                            : "border-slate-100 text-slate-500"
+                        }`}>
+                          <span className="opacity-70">{rub.itemsCount} rubricas/atividades</span>
+                          <span className={isServicos || isExercicios ? "text-white" : "text-sky-800"}>
+                            {pct.toFixed(1)}% do total
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-lg font-black font-mono text-slate-900">
-                        {rub.totalValor.toLocaleString("pt-MZ", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}{" "}
-                        <span className="text-[10px] font-sans font-normal text-slate-500">MZN</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[10px] text-slate-500 mt-2 pt-2 border-t border-slate-100 font-medium">
-                        <span>{rub.itemsCount} rubricas/atividades</span>
-                        <span className="font-bold text-sky-800">{pct.toFixed(1)}% do total</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             ) : (
               <p className="text-xs text-slate-500 italic text-center py-2">

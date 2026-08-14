@@ -148,57 +148,6 @@ export default function ChangePasswordModal({
           }
         }
 
-        // Atualizar sigep_users_cache no localStorage
-        try {
-          const cache: any[] = JSON.parse(
-            localStorage.getItem("sigep_users_cache") || "[]",
-          );
-          const updatedCache = cache.map((u: any) => {
-            if (
-              u.id === user.id ||
-              (u.email &&
-                u.email.toLowerCase() === (user.email || "").toLowerCase()) ||
-              (u.nuit && u.nuit === user.nuit)
-            ) {
-              return {
-                ...u,
-                password: newPassword,
-                mustChangePassword: false,
-                isFirstAccess: false,
-              };
-            }
-            return u;
-          });
-          localStorage.setItem(
-            "sigep_users_cache",
-            safeJSONStringify(updatedCache),
-          );
-        } catch (e) {
-          console.warn("Erro ao atualizar cache local de utilizadores:", e);
-        }
-
-        // Update local storage if this is the currently logged in user
-        const storedUser = localStorage.getItem("sigep_logged_in_user");
-        if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          if (
-            parsed.id === user.id ||
-            parsed.email === user.email ||
-            parsed.nuit === user.nuit
-          ) {
-            const updatedUser = {
-              ...parsed,
-              password: newPassword,
-              mustChangePassword: false,
-              isFirstAccess: false,
-            };
-            localStorage.setItem(
-              "sigep_logged_in_user",
-              safeJSONStringify(updatedUser),
-            );
-          }
-        }
-
         setSuccess("Senha redefinida com sucesso.");
         setTimeout(() => {
           onClose();

@@ -16,6 +16,7 @@ import { safeJSONStringify } from "../../lib/utils";
 import MainHeader from "../bloco1_apresentacao/MainHeader";
 import RegistarFuncionarioForm from "../bloco8_gerais/RegistarFuncionarioForm";
 import { isSuperBossUser, getRoles } from "../../lib/auth";
+import { firestoreService } from "../../lib/firestoreService";
 
 interface AfetacaoViewProps {
   onClose: () => void;
@@ -365,24 +366,31 @@ export default function AfetacaoView({
     });
   };
 
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem("afetacaoChecklist");
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
-  const toggleCheck = (id: string) => {
+  useEffect(() => {
+    const unsub = firestoreService.subscribeToDocument<any>("afetacao_checklist", "main", (docData) => {
+      if (docData && Array.isArray(docData.ids)) {
+        setCheckedIds(new Set(docData.ids));
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const toggleCheck = async (id: string) => {
     const newChecked = new Set(checkedIds);
     if (newChecked.has(id)) newChecked.delete(id);
     else newChecked.add(id);
     setCheckedIds(newChecked);
-    localStorage.setItem(
-      "afetacaoChecklist",
-      safeJSONStringify(Array.from(newChecked)),
-    );
+    
+    try {
+      await firestoreService.afetacao_checklist.set("main", {
+        ids: Array.from(newChecked),
+        updatedAt: new Date().toISOString()
+      });
+    } catch (e) {
+      console.error("Erro ao salvar checklist de afetação no Firestore:", e);
+    }
   };
 
   const { stats, mappedColaboradores } = useMemo(() => {

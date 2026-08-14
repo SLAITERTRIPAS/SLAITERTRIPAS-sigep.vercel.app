@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { motion } from "motion/react";
 import { Printer } from "lucide-react";
 import { printElementById } from "../../lib/printUtils";
+import { ISPSLogo } from "../../components/InstitutionAssets";
 
 interface BalancoActividadesViewProps {
   activities: any[];
@@ -285,12 +286,9 @@ export default function BalancoActividadesView({
             </div>
 
             <div className="space-y-4 mb-24">
-              <img
-                src="https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad"
-                alt="Logo ISPS"
-                className="w-32 h-32 object-contain mx-auto mb-6"
-                referrerPolicy="no-referrer"
-              />
+              <div className="w-32 h-32 mx-auto mb-6 flex items-center justify-center">
+                <ISPSLogo className="w-full h-full object-contain" alt="Logo ISPS" />
+              </div>
               <h2 className="text-lg font-bold uppercase text-slate-700 tracking-wide">
                 {entityName}
               </h2>

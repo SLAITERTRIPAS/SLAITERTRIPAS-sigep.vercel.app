@@ -26,6 +26,7 @@ import ChangePasswordModal from "./ChangePasswordModal";
 import ShareProcessoModal from "../../components/modals/ShareProcessoModal";
 import { toTitleCase as tc, confirmWorkspaceExit } from "../../lib/utils";
 import { getRoles, isSuperBossUser } from "../../lib/auth";
+import { ISPSLogo } from "../../components/InstitutionAssets";
 
 interface MainHeaderProps {
   user?: any;
@@ -201,12 +202,7 @@ export default function MainHeader({
           {/* Left - Logos */}
           <div className="flex items-center gap-2 md:gap-3 shrink-0">
             <div className="flex border-2 border-white p-0.5 rounded-xl items-center justify-center bg-white overflow-hidden w-8 h-8 md:w-11 md:h-11 shrink-0 shadow-lg">
-              <img
-                src="https://lh3.googleusercontent.com/d/11zvvpOpZARM1yk_irEDpjJ-qBKlTlhad"
-                alt="Logo ISPS"
-                className="w-full h-full object-contain"
-                referrerPolicy="no-referrer"
-              />
+              <ISPSLogo className="w-full h-full object-contain" alt="Logo ISPS" />
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-1">

@@ -283,9 +283,13 @@ export const ActivityTableRow = React.memo(function ActivityTableRow({
                   {activity.statusAprovacao === "aprovada" ||
                   activity.aprovada ? (
                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 uppercase">
-                      ✓ Aprovada
+                      ✓ Planificada (Prioridade Alta)
                     </span>
-                  ) : null}
+                  ) : (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-50 text-amber-800 border border-amber-200 uppercase">
+                      Proposta
+                    </span>
+                  )}
                   {activity.ano ? (
                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200 uppercase">
                       Ano: {activity.ano}
@@ -382,7 +386,10 @@ export const ActivityTableRow = React.memo(function ActivityTableRow({
                                   status: "institucional",
                                   isPESOE: true,
                                   situacaoActividade: "agendada",
-                                  prioridade: selectedPriority,
+                                  prioridade: "Alta",
+                                  tipo: "Atividade Planificada",
+                                  tipoProposta: "Atividade Planificada",
+                                  isProposta: false,
                                   fonteReceita: selectedFonte,
                                   orcamento: selectedFonte,
                                   ano: 2027,
@@ -396,7 +403,10 @@ export const ActivityTableRow = React.memo(function ActivityTableRow({
                                 activity.status = "institucional";
                                 activity.isPESOE = true;
                                 activity.situacaoActividade = "agendada";
-                                activity.prioridade = selectedPriority;
+                                activity.prioridade = "Alta";
+                                activity.tipo = "Atividade Planificada";
+                                activity.tipoProposta = "Atividade Planificada";
+                                activity.isProposta = false;
                                 activity.fonteReceita = selectedFonte;
                                 activity.orcamento = selectedFonte;
                                 activity.ano = 2027;

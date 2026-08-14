@@ -357,6 +357,7 @@ export default function IndividualProcessForm({
   onDelete,
   history,
   activities,
+  user,
 }: {
   colaboradores: Colaborador[];
   initialData?: IndividualProcessData;
@@ -365,6 +366,7 @@ export default function IndividualProcessForm({
   onDelete?: () => void;
   history: any[];
   activities?: any[];
+  user: any;
 }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [formData, setFormData] = useState<IndividualProcessData>(() => {
@@ -400,14 +402,7 @@ export default function IndividualProcessForm({
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const FORM_ID = "individual_process_form";
-  let currentUser: any = {};
-  try {
-    currentUser = JSON.parse(
-      localStorage.getItem("sigep_logged_in_user") || "{}",
-    );
-  } catch (e) {
-    console.warn("Erro ao ler utilizador do localStorage:", e);
-  }
+  const currentUser = user || {};
 
   useEffect(() => {
     const checkDraft = async () => {
@@ -464,6 +459,10 @@ export default function IndividualProcessForm({
       if (draft && draft.formData) {
         setFormData(normalizeFormData(draft.formData));
         if (draft.currentPage) setCurrentPage(draft.currentPage);
+      }
+      // Uma vez reutilizado/recuperado, o rascunho desaparece até haver outro
+      if (currentUser?.id) {
+        await firestoreService.drafts.deleteByUserAndForm(currentUser.id, FORM_ID);
       }
     } catch (e) {
       console.error("Erro ao recuperar rascunho:", e);

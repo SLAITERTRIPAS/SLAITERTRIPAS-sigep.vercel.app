@@ -6,6 +6,7 @@ import FichaInventarioMovel from "../bloco6_documentos/FichaInventarioMovel";
 import OrdemServicoTransferencia from "../bloco6_documentos/OrdemServicoTransferencia";
 import GuiaApresentacaoInterna from "../bloco6_documentos/GuiaApresentacaoInterna";
 import InformacaoPropostaForm from "../bloco6_documentos/InformacaoPropostaForm";
+import ProjetoFinanciamentoForm from "../bloco6_documentos/ProjetoFinanciamentoForm";
 import { firestoreService } from "../../lib/firestoreService";
 import { isSuperBossUser, isPersonnelBoss } from "../../lib/auth";
 import { SectionHeader } from "../../components/shared/SectionHeader";
@@ -80,6 +81,12 @@ export default function DocumentosView({ user }: { title: string; user: any }) {
       normalized === "informacao"
     ) {
       setActiveDigitalForm("m6");
+    } else if (
+      normalized.includes("projeto para financiamento") ||
+      normalized.includes("financiamento") ||
+      normalized.includes("projeto para financ")
+    ) {
+      setActiveDigitalForm("m7");
     } else {
       alert(`O modelo para "${val}" ainda não está implementado.`);
       e.target.value = ""; // reset
@@ -143,6 +150,12 @@ export default function DocumentosView({ user }: { title: string; user: any }) {
             onCancel={() => setActiveDigitalForm(null)}
           />
         )}
+        {activeDigitalForm === "m7" && (
+          <ProjetoFinanciamentoForm
+            user={user}
+            onCancel={() => setActiveDigitalForm(null)}
+          />
+        )}
       </ActiveFormWrapper>
     );
   }
@@ -177,6 +190,7 @@ export default function DocumentosView({ user }: { title: string; user: any }) {
                 Minuta de pedido de férias
               </option>
               <option value="Informação proposta">Informação proposta</option>
+              <option value="Projeto para Financiamento">Projeto para Financiamento</option>
               <option value="Requisição Interna">Requisição Interna</option>
               <option value="Pedido de Transferência Interna">
                 Pedido de Transferência Interna

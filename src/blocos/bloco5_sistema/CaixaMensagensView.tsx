@@ -193,7 +193,7 @@ export default function CaixaMensagensView({
         (c.cargo?.toLowerCase().includes("administrador") ||
           c.cargoChefia?.toLowerCase().includes("administrador") ||
           c.nome === "Franzíssi Tripalonga" ||
-          c.nome === "SLAITER TRIPAS"),
+          c.nome === "Slaiter Tripas"),
     );
   }, [colaboradores, user]);
 
