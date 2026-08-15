@@ -195,6 +195,8 @@ export default function App() {
       }).catch(console.warn);
     }
 
+    let hasMatched = false;
+
     const unsub = onSnapshot(
       doc(db, "users", user.id),
       (snapshot) => {
@@ -202,8 +204,12 @@ export default function App() {
           const data = snapshot.data();
           const serverSessionId = data.activeSessionId;
 
-          // Se existe um token de sessão no servidor e ele não coincide com este dispositivo/aba
-          if (serverSessionId && serverSessionId !== localSessionId) {
+          if (serverSessionId === localSessionId) {
+            hasMatched = true;
+          }
+
+          // Se existe um token de sessão no servidor, ele já coincidiu com a nossa sessão em algum momento, e agora mudou para outra
+          if (hasMatched && serverSessionId && serverSessionId !== localSessionId) {
             alert(
               "A sua sessão foi encerrada porque a sua conta foi iniciada noutro dispositivo.",
             );
@@ -1207,7 +1213,7 @@ export default function App() {
       setView("documentos_normativos");
       return;
     }
-    if (title === "Relatórios") {
+    if (title === "Relatórios" || title === "Relatório de Atividades" || title === "Relatório") {
       setDashboardTitle(title);
       setView("relatorios");
       return;

@@ -11,6 +11,8 @@ import {
   ChevronRight,
   Bell,
   AlertTriangle,
+  TrendingUp,
+  FileCheck,
 } from "lucide-react";
 import { normalize as n, isMatch, toTitleCase as tc } from "../../lib/utils";
 import { isBossUser, isSuperBossUser, getRoles } from "../../lib/auth";
@@ -124,17 +126,18 @@ export default function MainMenu({
                 "1px 1px 0 #000, 2px 2px 0 #000, 3px 3px 0 #000, 4px 4px 0 #000, 5px 5px 8px rgba(0,0,0,0.5)",
             }}
           >
-            Menu principal
+            Menu Principal
           </h2>
           <p className="text-sm sm:text-base lg:text-lg text-gray-500 font-medium font-serif italic">
-            Selecione a área a que deseja aceder
+            Selecione o bloco do sistema a que deseja aceder
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 w-[90%] mx-auto py-2 sm:py-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-[90%] mx-auto py-2 sm:py-6">
           {[
             {
               title: "Órgão de Direção e Gestão",
+              blockLabel: "Bloco 3 & 3.1",
               icon: LayoutGrid,
               color: "bg-[#1e3a8a]",
               items: menuItems[0]?.items,
@@ -143,6 +146,7 @@ export default function MainMenu({
             },
             {
               title: "Unidade orgânica",
+              blockLabel: "Bloco 4, 4.1 & 4.2",
               icon: Building2,
               color: "bg-[#991b1b]",
               items: menuItems[1]?.items,
@@ -151,6 +155,7 @@ export default function MainMenu({
             },
             {
               title: "Serviços Centrais",
+              blockLabel: "Bloco 5, 5.1 & 5.2",
               icon: Briefcase,
               color: "bg-[#4b5563]",
               items: menuItems[2]?.items,
@@ -159,11 +164,42 @@ export default function MainMenu({
             },
             {
               title: "Sistema",
+              blockLabel: "Bloco 6",
               icon: Settings,
-              color: "bg-black",
+              color: "bg-slate-950",
               items: menuItems[3]?.items,
               accessible: menuItems[3]?.accessible,
               visible: menuItems[3]?.visible,
+            },
+            {
+              title: "Documentos Normativos",
+              blockLabel: "Bloco 7",
+              icon: FileText,
+              color: "bg-teal-800",
+              items: [],
+              accessible: true,
+              visible: false,
+              onClickDirect: () => onNavigate("Documentos Normativos", []),
+            },
+            {
+              title: "Relatórios e Balanços",
+              blockLabel: "Bloco 8",
+              icon: TrendingUp,
+              color: "bg-purple-800",
+              items: [],
+              accessible: true,
+              visible: false,
+              onClickDirect: () => onNavigate("Relatórios", []),
+            },
+            {
+              title: "Relatório de Atividades",
+              blockLabel: "Bloco 9",
+              icon: FileCheck,
+              color: "bg-amber-700",
+              items: [],
+              accessible: true,
+              visible: false,
+              onClickDirect: () => onNavigate("Relatório de Atividades", []),
             },
           ]
             .filter((item) => item && item.visible)
@@ -171,23 +207,24 @@ export default function MainMenu({
               <button
                 key={index}
                 onClick={() => {
-                  onNavigate(item.title, item.items || []);
+                  if (item.onClickDirect) {
+                    item.onClickDirect();
+                  } else {
+                    onNavigate(item.title, item.items || []);
+                  }
                 }}
-                className={`${item.color} w-full text-white p-3 sm:p-4 rounded-xl sm:rounded-[1.5rem] flex sm:flex-col items-center justify-between sm:justify-center gap-2 sm:gap-4 min-h-[3.2rem] sm:min-h-[8.4rem] lg:min-h-[12.6rem] shadow-lg hover:shadow-xl active:scale-[0.98] touch-manipulation transition-all duration-200 cursor-pointer text-left sm:text-center group`}
+                className={`${item.color} w-full text-white p-5 sm:p-6 rounded-2xl flex flex-col items-center justify-between gap-4 min-h-[180px] shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer text-center group relative`}
               >
-                <div className="p-1.5 sm:p-3 bg-white/10 rounded-lg sm:rounded-xl group-hover:bg-white/20 transition-colors shrink-0">
+                <div className="p-3 bg-white/10 rounded-2xl group-hover:bg-white/20 transition-colors shrink-0 mt-2">
                   <item.icon
-                    className="w-5 h-5 sm:w-10 sm:h-10 lg:w-12 lg:h-12"
+                    className="w-10 h-10 lg:w-12 lg:h-12"
                     strokeWidth={1.5}
                   />
                 </div>
-                <span className="text-sm sm:text-base lg:text-lg font-black font-serif tracking-tight leading-tight flex-1 text-center">
+
+                <span className={`${index === 0 ? "text-[13px]" : "text-sm sm:text-base lg:text-lg"} font-black font-serif tracking-tight leading-tight w-full text-center mt-1`}>
                   {item.title}
                 </span>
-                <ChevronRight
-                  size={16}
-                  className="sm:hidden text-white/70 shrink-0"
-                />
               </button>
             ))}
         </div>

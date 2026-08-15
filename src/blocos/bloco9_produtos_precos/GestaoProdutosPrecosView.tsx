@@ -228,7 +228,7 @@ export default function GestaoProdutosPrecosView() {
         <div className="relative z-10 space-y-2 text-center md:text-left">
           <span className="text-[10px] font-black uppercase tracking-widest bg-blue-500/30 text-blue-200 px-3.5 py-1 rounded-full border border-blue-400/30 inline-flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-blue-300" />
-            Bloco 9 — Gestão de Produtos & Preços
+            Gestão de Produtos & Preços
           </span>
           <h2 className="text-2xl font-black tracking-tight font-serif text-white">
             Planilha Gestão de Produtos e Preços

@@ -233,7 +233,7 @@ export default function MainHeader({
             className="hidden lg:flex flex-col items-center justify-center border-2 border-white/20 px-4 py-1 bg-[#0a0f2b] min-w-[220px] mx-auto overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.5)] border-t-white/40 border-l-white/40"
             style={{ 
               fontFamily: '"Bookman Old Style", serif',
-              borderRadius: '0.5px' 
+              borderRadius: '16px' 
             }}
           >
             <div className="flex flex-col items-center justify-center gap-0.5 w-full leading-tight">

@@ -19,6 +19,86 @@ import { LibraryRegistration, BookRegistration } from "../../types";
 import { isSuperBossUser, isPatrimonioBossOrAdmin, isDPEPUser, isChefeDPEPUser } from "../../lib/auth";
 import MainHeader from "../bloco1_apresentacao/MainHeader";
 
+const getSubBlockLabel = (parentTitle: string, itemTitle: string) => {
+  const pt = parentTitle.toUpperCase();
+  const it = itemTitle.toUpperCase();
+
+  // Bloco 3: Órgão de Direção e Gestão
+  if (pt.includes("DIREÇÃO E GESTÃO") || pt.includes("DIRECAO E GESTAO")) {
+    if (it.includes("REPRESENTANTES")) return "Sub-bloco 3.2";
+    if (it.includes("GABINETE DO DIRETOR") || it.includes("GABINETE DO DIRECTOR")) return "Sub-bloco 3.1";
+    if (it.includes("ADMINISTRATIVO")) return "Sub-bloco 3.3";
+    if (it.includes("TÉCNICO") || it.includes("TECNICO")) return "Sub-bloco 3.4";
+  }
+
+  // Bloco 3.1: Gabinete do Diretor-Geral
+  if (pt.includes("GABINETE DO DIRETOR") || pt.includes("GABINETE DO DIRECTOR") || pt.includes("DIRETOR-GERAL") || pt.includes("DIRECTOR-GERAL")) {
+    if (it.includes("DIRETOR-GERAL") || it.includes("DIRECTOR-GERAL")) return "Sub-bloco 3.1.1";
+    if (it.includes("CHEFE DO GDG") || it === "CHEFE GDG" || it.includes("CHEFE DO GABINETE")) return "Sub-bloco 3.1.2";
+    if (it.includes("SECRETARIA EXECUTIVA") || it.includes("SECRETARIA")) return "Sub-bloco 3.1.3";
+    if (it.includes("PLANIFICAÇÃO") || it.includes("PLANIFICACAO") || it.includes("ESTUDOS E PROJETOS")) return "Sub-bloco 3.1.4";
+    if (it.includes("UGEA") || it.includes("AQUISIÇÕES") || it.includes("AQUISICOES") || it.includes("CONTRATAÇÃO")) return "Sub-bloco 3.1.5";
+    if (it.includes("COOPERAÇÃO") || it.includes("COOPERACAO")) return "Sub-bloco 3.1.6";
+    if (it.includes("CONTROLO TÉCNICO") || it.includes("CONTROLO TECNICO")) return "Sub-bloco 3.1.7";
+    if (it.includes("JURÍDICO") || it.includes("JURIDICO")) return "Sub-bloco 3.1.8";
+  }
+
+  // Bloco 4: Unidade Orgânica
+  if (pt.includes("UNIDADE ORGÂNICA") || pt.includes("UNIDADE ORGANICA")) {
+    if (it.includes("DIVISÃO DE ENGENHARIA") || it.includes("DIVISAO DE ENGENHARIA") || it.includes("ENGENHARIA")) return "Sub-bloco 4.1";
+    if (it.includes("INCUBAÇÃO") || it.includes("INCUBACAO") || it.includes("CIE")) return "Sub-bloco 4.2";
+    if (it.includes("CENTROS")) return "Sub-bloco 4.3";
+  }
+
+  // Bloco 4.1: Divisão de Engenharia
+  if (pt.includes("DIVISÃO DE ENGENHARIA") || pt.includes("DIVISAO DE ENGENHARIA") || pt.includes("ENGENHARIA")) {
+    if (it.includes("DIRETOR DA DIVISÃO") || it.includes("DIRECTOR DA DIVISAO")) return "Sub-bloco 4.1.1";
+    if (it.includes("PEDAGÓGICO") || it.includes("PEDAGOGICO") || it.includes("ADJUNTO")) return "Sub-bloco 4.1.2";
+    if (it.includes("PESQUISA")) return "Sub-bloco 4.1.3";
+    if (it.includes("ELETROTÉCNICA") || it.includes("ELETROTECNICA")) return "Sub-bloco 4.1.4";
+    if (it.includes("CONSTRUÇÃO CIVIL") || it.includes("CONSTRUCO CIVIL")) return "Sub-bloco 4.1.5";
+    if (it.includes("MECÂNICA") || it.includes("MECANICA") || it.includes("CONSTRUÇÃO MECÂNICA")) return "Sub-bloco 4.1.6";
+    if (it.includes("DISCIPLINAS GERAIS")) return "Sub-bloco 4.1.7";
+    if (it.includes("TÉCNICO E DE APOIO") || it.includes("TECNICO E DE APOIO") || it.includes("APOIO")) return "Sub-bloco 4.1.8";
+  }
+
+  // Bloco 4.2: Centro de Incubação de Empresas
+  if (pt.includes("INCUBAÇÃO DE EMPRESAS") || pt.includes("INCUBACAO DE EMPRESAS") || pt.includes("CIE")) {
+    if (it.includes("DIRETOR") || it.includes("DIRECTOR") || it === "DIRETOR DO CIE") return "Sub-bloco 4.2.1";
+    if (it.includes("PRÁTICAS DE GERAÇÃO") || it.includes("PRATICAS DE GERACAO") || it.includes("DPGNDE")) return "Sub-bloco 4.2.2";
+    if (it.includes("CONSULTORIA") || it.includes("DCPAF")) return "Sub-bloco 4.2.3";
+    if (it.includes("PROSPECÇÃO") || it.includes("PROSPECCAO") || it.includes("DPONE")) return "Sub-bloco 4.2.4";
+  }
+
+  // Bloco 5: Serviços Centrais
+  if (pt.includes("SERVIÇOS CENTRAIS") || pt.includes("SERVICOS CENTRAIS")) {
+    if (it.includes("DICOSAFA")) return "Sub-bloco 5.1";
+    if (it.includes("DICOSSER")) return "Sub-bloco 5.2";
+  }
+
+  // Bloco 5.1: DICOSAFA
+  if (pt.includes("DICOSAFA") || pt.includes("DICOSSAFA")) {
+    if (it.includes("DIRETOR DA DICOSAFA") || it.includes("DIRECTOR DA DICOSAFA")) return "Sub-bloco 5.1.1";
+    if (it.includes("RECURSOS HUMANOS") || it.includes("RH")) return "Sub-bloco 5.1.2";
+    if (it.includes("FINANÇAS") || it.includes("FINANCAS")) return "Sub-bloco 5.1.3";
+    if (it.includes("PATRIMÓNIO") || it.includes("PATRIMONIO")) return "Sub-bloco 5.1.4";
+    if (it.includes("SECRETARIA GERAL") || it.includes("SECRETARIA") || it === "SECRETARIA GERAL") return "Sub-bloco 5.1.5";
+    if (it.includes("TIC") || it.includes("TECNOLOGIAS")) return "Sub-bloco 5.1.6";
+    if (it.includes("LAR DE ESTUDANTES") || it.includes("ALOJAMENTO") || it.includes("LAR")) return "Sub-bloco 5.1.7";
+    if (it.includes("PRODUÇÃO ALIMENTAR") || it.includes("PRODUCAO ALIMENTAR") || it.includes("ALIMENTAR")) return "Sub-bloco 5.1.8";
+  }
+
+  // Bloco 5.2: DICOSSER
+  if (pt.includes("DICOSSER")) {
+    if (it.includes("DIRETOR DA DICOSSER") || it.includes("DIRECTOR DA DICOSSER")) return "Sub-bloco 5.2.1";
+    if (it.includes("REGISTO ACADÉMICO") || it.includes("REGISTO ACADEMICO") || it.includes("DRA")) return "Sub-bloco 5.2.2";
+    if (it.includes("ASSUNTOS ESTUDANTIS") || it.includes("ESTUDANTIS")) return "Sub-bloco 5.2.3";
+    if (it.includes("BIBLIOTECA") || it.includes("LIVROS")) return "Sub-bloco 5.2.4";
+  }
+
+  return "";
+};
+
 export default function SubMenu({
   title,
   items,
@@ -402,65 +482,71 @@ export default function SubMenu({
 
         {/* Menu Grid Items - Adaptable layout centering items properly based on count */}
         <div className={`grid gap-4 sm:gap-6 w-full mx-auto ${gridClass} ${maxWidthClass}`}>
-          {displayItems.map((item, index) => (
-            <button
-              key={index}
-              onClick={async () => {
-                if (!isAllowed(item)) {
-                  onShowAlert("Área não acessível ao seu perfil.");
-                  try {
-                    const { firestoreService } =
-                      await import("../../lib/firestoreService");
-                    await firestoreService.accessAlerts.add({
-                      userName: user?.name || user?.email || "Desconhecido",
-                      userEmail: user?.email || "",
-                      userRole: user?.role || "",
-                      userNuit: user?.nuit || "",
-                      targetSector: item.title,
-                      timestamp: new Date().toISOString(),
-                    });
-                  } catch (e) {}
-                  return;
-                }
-                if (item.title === "Registos de Visitantes") {
-                  setShowLibraryVisitForm(true);
-                } else if (item.title === "Registo de Obras e Livros") {
-                  setShowBookRegistrationForm(true);
-                } else if (item.title === "Repartição de Arquivo") {
-                  setShowArchiveView(true);
-                } else if (item.subItems && item.subItems.length > 0) {
-                  onNavigate?.(item.title, item.subItems);
-                } else {
-                  onNavigate?.(item.title, []);
-                }
-              }}
-              className={`${isServicosCentrais ? 'bg-[#5842ff] min-h-[220px] p-8 rounded-3xl flex flex-col items-center justify-between text-center shadow-xl hover:scale-[1.02] transition-all cursor-pointer text-white' : `${colors[index % colors.length]} w-full text-white p-3 sm:p-4 lg:p-5 rounded-xl sm:rounded-[1.5rem] flex sm:flex-col items-center justify-between sm:justify-center gap-2 sm:gap-3 lg:gap-4 min-h-[3rem] sm:min-h-[6rem] lg:min-h-[8rem] shadow-lg hover:shadow-xl active:scale-[0.98] touch-manipulation transition-all duration-200 cursor-pointer text-left sm:text-center ${!isAllowed(item) ? "opacity-50 grayscale cursor-not-allowed" : ""}`}`}
-            >
-              <span
-                className={`font-black font-serif tracking-tight leading-snug uppercase ${isServicosCentrais ? 'text-white text-sm sm:text-base my-auto' : 'flex-1 text-xs sm:text-sm lg:text-base'}`}
+          {displayItems.map((item, index) => {
+            const label = getSubBlockLabel(title, item.title);
+            return (
+              <button
+                key={index}
+                onClick={async () => {
+                  if (!isAllowed(item)) {
+                    onShowAlert("Área não acessível ao seu perfil.");
+                    try {
+                      const { firestoreService } =
+                        await import("../../lib/firestoreService");
+                      await firestoreService.accessAlerts.add({
+                        userName: user?.name || user?.email || "Desconhecido",
+                        userEmail: user?.email || "",
+                        userRole: user?.role || "",
+                        userNuit: user?.nuit || "",
+                        targetSector: item.title,
+                        timestamp: new Date().toISOString(),
+                      });
+                    } catch (e) {}
+                    return;
+                  }
+                  if (item.title === "Registos de Visitantes") {
+                    setShowLibraryVisitForm(true);
+                  } else if (item.title === "Registo de Obras e Livros") {
+                    setShowBookRegistrationForm(true);
+                  } else if (item.title === "Repartição de Arquivo") {
+                    setShowArchiveView(true);
+                  } else if (item.subItems && item.subItems.length > 0) {
+                    onNavigate?.(item.title, item.subItems);
+                  } else {
+                    onNavigate?.(item.title, []);
+                  }
+                }}
+                className={`${isServicosCentrais ? 'bg-[#5842ff] min-h-[220px] p-8 rounded-3xl flex flex-col items-center justify-between text-center shadow-xl hover:scale-[1.02] transition-all cursor-pointer text-white relative' : `${colors[index % colors.length]} w-full text-white p-5 rounded-2xl flex flex-col items-center justify-between gap-4 min-h-[160px] shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] touch-manipulation transition-all duration-200 cursor-pointer text-center relative ${!isAllowed(item) ? "opacity-50 grayscale cursor-not-allowed" : ""}`}`}
               >
-                {item.title}
-              </span>
-              <div className="flex items-center justify-center opacity-90 shrink-0 mt-4">
-                {isServicosCentrais ? (
-                  <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-black">
-                    <ChevronRight size={22} />
-                  </div>
-                ) : item.subItems && item.subItems.length > 0 ? (
-                  <ChevronRight
-                    size={18}
-                    className="sm:w-5 sm:h-5 lg:w-6 lg:h-6"
-                  />
-                ) : (
+                <div className="flex-1 flex flex-col items-center justify-center w-full mt-5">
                   <span
-                    className="font-bold bg-white/20 px-2 py-0.5 rounded-md text-[8px] sm:text-[9px]"
+                    className={`font-black font-serif tracking-tight leading-snug uppercase ${isServicosCentrais ? 'text-white text-sm sm:text-base' : 'text-xs sm:text-sm lg:text-base'}`}
                   >
-                    Aceder
+                    {item.title}
                   </span>
-                )}
-              </div>
-            </button>
-          ))}
+                </div>
+
+                <div className="flex items-center justify-center opacity-90 shrink-0 mt-2">
+                  {isServicosCentrais ? (
+                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-black">
+                      <ChevronRight size={22} />
+                    </div>
+                  ) : item.subItems && item.subItems.length > 0 ? (
+                    <ChevronRight
+                      size={18}
+                      className="sm:w-5 sm:h-5 lg:w-6 lg:h-6"
+                    />
+                  ) : (
+                    <span
+                      className="font-bold bg-white/20 px-2.5 py-1 rounded-full text-[9px] uppercase tracking-wider"
+                    >
+                      Aceder
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </main>
     </div>
