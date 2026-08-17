@@ -25,6 +25,8 @@ export const ActivityTableRow = React.memo(function ActivityTableRow({
   isDPEP,
   user,
   isBossOrAdmin,
+  isBudgetVisible,
+  isBudgetPeriodValid,
 }: {
   activity: any;
   getActivityTotal: (act: any) => number;
@@ -37,6 +39,8 @@ export const ActivityTableRow = React.memo(function ActivityTableRow({
   isDPEP?: boolean;
   user?: any;
   isBossOrAdmin?: boolean;
+  isBudgetVisible?: boolean;
+  isBudgetPeriodValid?: boolean;
 }) {
   if (!activity) return null; // Adição de verificação de segurança
 
@@ -572,18 +576,20 @@ export const ActivityTableRow = React.memo(function ActivityTableRow({
               {rubricaItem.quantidade || rubricaItem.numeroPessoas || "-"}
             </td>
             <td className="p-1 border-r border-slate-300 text-[10px] text-right font-medium text-slate-500 w-20">
-              {rubricaItem.precoUnitario
-                ? Number(rubricaItem.precoUnitario).toLocaleString("pt-MZ", {
-                    minimumFractionDigits: 2,
-                  })
-                : "-"}
+              {isBudgetVisible ? (
+                rubricaItem.precoUnitario ? Number(rubricaItem.precoUnitario).toLocaleString("pt-MZ", {
+                  minimumFractionDigits: 2,
+                }) : "-"
+              ) : "OCULTO"}
             </td>
             <td className="p-1 border-r border-slate-300 text-[10px] text-right font-black text-slate-900 w-24 bg-[#dbe5f1]">
-              {totalRowValue
-                ? totalRowValue.toLocaleString("pt-MZ", {
+              {isBudgetVisible ? (
+                isBudgetPeriodValid ? (
+                  totalRowValue ? totalRowValue.toLocaleString("pt-MZ", {
                     minimumFractionDigits: 2,
-                  })
-                : "-"}
+                  }) : "-"
+                ) : "0,00"
+              ) : "OCULTO"}
             </td>
           </tr>
         );

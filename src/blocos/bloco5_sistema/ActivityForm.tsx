@@ -698,7 +698,11 @@ export default function ActivityForm({
   // Use Firestore colaboradores if available, fallback to FUNCIONARIOS
   const formatLabel = (c: any) => {
     if (!c) return "Responsável";
-    return `${c.nome || "Colaborador"}`;
+    const orgao = c.unidade || "ISPS";
+    const dir = c.direcao || "---";
+    const dep = c.departamento || "---";
+    const rep = c.reparticao || "---";
+    return `${c.nome || "Colaborador"} [${orgao} > ${dir} > ${dep}]`;
   };
 
   const getUniqueOptions = (list: any[]) => {
@@ -2839,6 +2843,15 @@ export default function ActivityForm({
 
   const nextStep = () => {
     if (validateStep(step)) {
+      // Garantir que produtos manuais do passo 7 são guardados na base de dados ao avançar
+      if (step === 7 && Array.isArray(formData.rubricas)) {
+        formData.rubricas.forEach((rubrica: any) => {
+          if (rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__") {
+            collectProductFromRubric(rubrica);
+          }
+        });
+      }
+
       if (step === 7 && !hasServiceRubrica) {
         // Se não tem rubrica de serviço, pula o passo 8 de aquisição/contratação
         setStep(9);
@@ -4221,40 +4234,112 @@ export default function ActivityForm({
 
             {/* Recursos Humanos */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-[10px] font-black text-blue-900 mb-1">
-                  Responsável
-                </label>
-                <SearchableSelect
-                  value={formData.responsavel}
-                  onChange={(val) => {
-                    const colab = (colaboradores || []).find(
-                      (c) => c.nome === val || c.name === val,
-                    );
-                    setFormData({
-                      ...formData,
-                      responsavel: val,
-                      responsavelEmail: colab?.email || "",
-                    });
-                  }}
-                  options={responsavelOptions}
-                  placeholder="Selecione o Responsável..."
-                  className="w-full"
-                />
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-black text-blue-900 mb-1">
+                    Responsável
+                  </label>
+                  <SearchableSelect
+                    value={formData.responsavel}
+                    onChange={(val) => {
+                      const colab = (colaboradores || []).find(
+                        (c) => c.nome === val
+                      ) || EFETIVO_GERAL_DATA.find(c => c.nome === val);
+                      setFormData({
+                        ...formData,
+                        responsavel: val,
+                        responsavelEmail: colab?.email || "",
+                      });
+                    }}
+                    options={responsavelOptions}
+                    placeholder="Selecione o Responsável..."
+                    className="w-full"
+                  />
+                </div>
+                {formData.responsavel && (
+                  <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl space-y-1 animate-in fade-in slide-in-from-top-1 duration-300">
+                    {(() => {
+                      const c = (colaboradores || []).find(x => x.nome === formData.responsavel) 
+                             || EFETIVO_GERAL_DATA.find(x => x.nome === formData.responsavel);
+                      if (!c) return null;
+                      return (
+                        <>
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-blue-900/60 font-bold uppercase tracking-wider">Alocação do Responsável</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div className="bg-white/60 p-2 rounded-lg border border-blue-50">
+                              <p className="text-[9px] text-blue-400 font-bold uppercase tracking-tighter">Órgão</p>
+                              <p className="font-black text-blue-900 truncate">{c.unidade || "ISPS"}</p>
+                            </div>
+                            <div className="bg-white/60 p-2 rounded-lg border border-blue-50">
+                              <p className="text-[9px] text-blue-400 font-bold uppercase tracking-tighter">Direção</p>
+                              <p className="font-black text-blue-900 truncate">{c.direcao || "---"}</p>
+                            </div>
+                            <div className="bg-white/60 p-2 rounded-lg border border-blue-50">
+                              <p className="text-[9px] text-blue-400 font-bold uppercase tracking-tighter">Departamento</p>
+                              <p className="font-black text-blue-900 truncate">{c.departamento || "---"}</p>
+                            </div>
+                            <div className="bg-white/60 p-2 rounded-lg border border-blue-50">
+                              <p className="text-[9px] text-blue-400 font-bold uppercase tracking-tighter">Repartição</p>
+                              <p className="font-black text-blue-900 truncate">{c.reparticao || "---"}</p>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="block text-[10px] font-black text-blue-900 mb-1">
-                  Outros Colaboradores
-                </label>
-                <SearchableSelect
-                  value={formData.outrosColaboradores}
-                  onChange={(val) =>
-                    setFormData({ ...formData, outrosColaboradores: val })
-                  }
-                  options={outrosColaboradoresOptions}
-                  placeholder="Selecione Colaboradores..."
-                  className="w-full"
-                />
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-black text-blue-900 mb-1">
+                    Outros Colaboradores
+                  </label>
+                  <SearchableSelect
+                    value={formData.outrosColaboradores}
+                    onChange={(val) =>
+                      setFormData({ ...formData, outrosColaboradores: val })
+                    }
+                    options={outrosColaboradoresOptions}
+                    placeholder="Selecione Colaboradores..."
+                    className="w-full"
+                  />
+                </div>
+                {formData.outrosColaboradores && (
+                  <div className="p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-1 animate-in fade-in slide-in-from-top-1 duration-300">
+                    {(() => {
+                      const c = (colaboradores || []).find(x => x.nome === formData.outrosColaboradores)
+                             || EFETIVO_GERAL_DATA.find(x => x.nome === formData.outrosColaboradores);
+                      if (!c) return null;
+                      return (
+                        <>
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-emerald-900/60 font-bold uppercase tracking-wider">Alocação do Colaborador</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div className="bg-white/60 p-2 rounded-lg border border-emerald-50">
+                              <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-tighter">Órgão</p>
+                              <p className="font-black text-emerald-900 truncate">{c.unidade || "ISPS"}</p>
+                            </div>
+                            <div className="bg-white/60 p-2 rounded-lg border border-emerald-50">
+                              <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-tighter">Direção</p>
+                              <p className="font-black text-emerald-900 truncate">{c.direcao || "---"}</p>
+                            </div>
+                            <div className="bg-white/60 p-2 rounded-lg border border-emerald-50">
+                              <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-tighter">Departamento</p>
+                              <p className="font-black text-emerald-900 truncate">{c.departamento || "---"}</p>
+                            </div>
+                            <div className="bg-white/60 p-2 rounded-lg border border-emerald-50">
+                              <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-tighter">Repartição</p>
+                              <p className="font-black text-emerald-900 truncate">{c.reparticao || "---"}</p>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -5009,17 +5094,17 @@ export default function ActivityForm({
                         {[
                           {
                             tipo: "Gasóleo",
-                            preco: 125,
+                            preco: Number(products.find(p => p.nome.toLowerCase().includes("gasóleo"))?.preco) || 125,
                             desc: "Diesel 50 ppm",
                           },
                           {
                             tipo: "Gasolina",
-                            preco: 100,
+                            preco: Number(products.find(p => p.nome.toLowerCase().includes("gasolina"))?.preco) || 100,
                             desc: "Super Sem Chumbo",
                           },
                           {
                             tipo: "Petróleo",
-                            preco: 95,
+                            preco: Number(products.find(p => p.nome.toLowerCase().includes("petróleo"))?.preco) || 95,
                             desc: "Kerosene/Iluminante",
                           },
                         ].map(({ tipo, preco, desc }) => {
@@ -5738,12 +5823,39 @@ export default function ActivityForm({
                                     value={
                                       products.some(p => p.nome === rubrica.nomeProduto)
                                         ? rubrica.nomeProduto
-                                        : (rubrica.nomeProduto ? "__custom__" : "")
+                                        : rubrica.nomeProduto === "__manual__" ? "__manual__" : ""
                                     }
                                     disabled={isBlocked}
                                     onChange={(e) => {
                                       const selectedProdName = e.target.value;
-                                      if (selectedProdName === "__custom__") return;
+                                      
+                                      if (selectedProdName === "__custom__") {
+                                        const newRubricas = [...formData.rubricas];
+                                        newRubricas[index] = {
+                                          ...rubrica,
+                                          nomeProduto: "__manual__", 
+                                          precoUnitario: 0,
+                                          detalhes: "Unidade",
+                                          especificacao: "",
+                                          valorTotal: 0,
+                                        };
+                                        setFormData({ ...formData, rubricas: newRubricas });
+                                        return;
+                                      }
+
+                                      if (!selectedProdName) {
+                                        const newRubricas = [...formData.rubricas];
+                                        newRubricas[index] = {
+                                          ...rubrica,
+                                          nomeProduto: "",
+                                          precoUnitario: 0,
+                                          detalhes: "Unidade",
+                                          especificacao: "",
+                                          valorTotal: 0,
+                                        };
+                                        setFormData({ ...formData, rubricas: newRubricas });
+                                        return;
+                                      };
                                       
                                       const found = products.find((p: any) => p.nome === selectedProdName);
                                       
@@ -5762,8 +5874,6 @@ export default function ActivityForm({
                                           quantidade: qtd,
                                           valorTotal,
                                         };
-                                      } else {
-                                        newRubricas[index] = { ...rubrica, nomeProduto: "" };
                                       }
                                       setFormData({ ...formData, rubricas: newRubricas });
                                     }}
@@ -5776,28 +5886,45 @@ export default function ActivityForm({
                                     }}
                                   >
                                     <option value="">Selecione o produto...</option>
-                                    {getFilteredProductsForRubrica(products, rubrica.rubrica, rubrica.necessidade).map((prod: any) => (
-                                      <option key={prod.nome} value={prod.nome}>
-                                        {prod.nome} — {Number(prod.preco || 0).toLocaleString("pt-MZ", { minimumFractionDigits: 2 })} MZN ({prod.unidade})
-                                      </option>
-                                    ))}
-                                    <option value="__custom__">Outro produto personalizado (Digitar abaixo)</option>
+                                    <optgroup label="Entrada Manual">
+                                      <option value="__custom__">➕ Outro (Inserir manualmente)...</option>
+                                    </optgroup>
+                                    <optgroup label="Produtos da Gestão de Preços">
+                                      {getFilteredProductsForRubrica(products, rubrica.rubrica, rubrica.necessidade).map((prod: any) => (
+                                        <option key={prod.nome} value={prod.nome}>
+                                          {prod.nome} — {Number(prod.preco || 0).toLocaleString("pt-MZ", { minimumFractionDigits: 2 })} MZN ({prod.unidade})
+                                        </option>
+                                      ))}
+                                    </optgroup>
                                   </select>
-                                  <input
-                                    type="text"
-                                    value={rubrica.nomeProduto || ""}
-                                    disabled={isBlocked}
-                                    placeholder="Ou digite o nome do produto..."
-                                    onChange={(e) => {
-                                      const newRubricas = [...formData.rubricas];
-                                      newRubricas[index] = { ...rubrica, nomeProduto: e.target.value };
-                                      setFormData({ ...formData, rubricas: newRubricas });
-                                    }}
-                                    className="w-full px-4 py-3 bg-white border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 transition-all shadow-sm"
-                                  />
+
+                                  {rubrica.nomeProduto === "__manual__" && (
+                                    <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                                      <input
+                                        type="text"
+                                        placeholder="Digite o nome do novo produto..."
+                                        autoFocus
+                                        onChange={(e) => {
+                                          const newRubricas = [...formData.rubricas];
+                                          newRubricas[index] = { ...rubrica, nomeProduto: e.target.value };
+                                          setFormData({ ...formData, rubricas: newRubricas });
+                                        }}
+                                        onBlur={() => {
+                                          if (rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && rubrica.nomeProduto.length > 2 && !products.some(p => p.nome === rubrica.nomeProduto)) {
+                                            collectProductFromRubric(rubrica);
+                                          }
+                                        }}
+                                        className="w-full px-4 py-3 bg-emerald-50 border-2 border-emerald-200 rounded-2xl text-[13px] font-black text-emerald-900 outline-none focus:border-emerald-500 transition-all shadow-sm placeholder:text-emerald-300"
+                                      />
+                                    </div>
+                                  )}
                                 </div>
                                 <p className="text-[9px] text-blue-800/60 italic leading-tight mt-1.5 flex items-center gap-1">
-                                  💡 Apenas produtos registados na Gestão de Produtos são listados aqui.
+                                  {products.some(p => p.nome === rubrica.nomeProduto) ? (
+                                    <>💡 Produto selecionado do catálogo oficial.</>
+                                  ) : (
+                                    <>🚀 Modo manual: Novos produtos serão guardados na Gestão de Produtos.</>
+                                  )}
                                 </p>
                               </div>
 
@@ -5808,7 +5935,7 @@ export default function ActivityForm({
                                 </label>
                                 <select
                                   value={rubrica.detalhes || "Unidade"}
-                                  disabled={isBlocked}
+                                  disabled={isBlocked || (!!rubrica.nomeProduto && products.some(p => p.nome === rubrica.nomeProduto))}
                                   onChange={(e) => {
                                     const newRubricas = [...formData.rubricas];
                                     newRubricas[index] = { ...rubrica, detalhes: e.target.value };
@@ -5853,6 +5980,7 @@ export default function ActivityForm({
                                 <textarea
                                   value={rubrica.especificacao || ""}
                                   disabled={isBlocked}
+                                  readOnly={!!rubrica.nomeProduto}
                                   placeholder="Descrição detalhada..."
                                   onChange={(e) => {
                                     const newRubricas = [...formData.rubricas];
@@ -5871,14 +5999,21 @@ export default function ActivityForm({
                                   </label>
                                   <input
                                     type="text"
-                                    value={rubrica.nomeProduto || ""}
+                                    value={rubrica.nomeProduto === "__manual__" ? "" : (rubrica.nomeProduto || "")}
                                     disabled={isBlocked}
+                                    readOnly={!!rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && products.some(p => p.nome === rubrica.nomeProduto)}
+                                    placeholder="Nome do novo produto..."
                                     onChange={(e) => {
                                       const newRubricas = [...formData.rubricas];
                                       newRubricas[index] = { ...rubrica, nomeProduto: e.target.value };
                                       setFormData({ ...formData, rubricas: newRubricas });
                                     }}
-                                    className="w-full px-4 py-3 bg-white border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 shadow-sm"
+                                    onBlur={() => {
+                                      if (rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && rubrica.nomeProduto.length > 2 && !products.some(p => p.nome === rubrica.nomeProduto)) {
+                                        collectProductFromRubric(rubrica);
+                                      }
+                                    }}
+                                    className={`w-full px-4 py-3 border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 shadow-sm ${!!rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && products.some(p => p.nome === rubrica.nomeProduto) ? "bg-gray-50" : "bg-white"}`}
                                   />
                                 </div>
                                 <div className="space-y-1.5">
@@ -5914,6 +6049,7 @@ export default function ActivityForm({
                                     type="number"
                                     value={rubrica.precoUnitario || ""}
                                     disabled={isBlocked}
+                                    readOnly={!!rubrica.nomeProduto && products.some(p => p.nome === rubrica.nomeProduto)}
                                     onChange={(e) => {
                                       const newRubricas = [...formData.rubricas];
                                       const prc = Number(e.target.value);
@@ -5924,7 +6060,12 @@ export default function ActivityForm({
                                       };
                                       setFormData({ ...formData, rubricas: newRubricas });
                                     }}
-                                    className="w-full px-4 py-3 bg-white border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 shadow-sm"
+                                    onBlur={() => {
+                                      if (rubrica.nomeProduto && !products.some(p => p.nome === rubrica.nomeProduto)) {
+                                        collectProductFromRubric(rubrica);
+                                      }
+                                    }}
+                                    className={`w-full px-4 py-3 border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 shadow-sm ${!!rubrica.nomeProduto && products.some(p => p.nome === rubrica.nomeProduto) ? "bg-gray-50" : "bg-white"}`}
                                   />
                                 </div>
                                 <div className="space-y-1.5">
@@ -5934,6 +6075,15 @@ export default function ActivityForm({
                                   <div className="w-full py-4 px-4 bg-[#eff6ff] border-2 border-blue-200/50 rounded-[20px] text-[15px] font-black text-blue-900 flex items-center justify-center shadow-inner">
                                     {((rubrica.quantidade || 0) * (rubrica.precoUnitario || 0)).toLocaleString("pt-MZ", { minimumFractionDigits: 2 })} MZN
                                   </div>
+                                  {!products.some(p => p.nome === rubrica.nomeProduto) && rubrica.nomeProduto && (
+                                    <button
+                                      type="button"
+                                      onClick={() => collectProductFromRubric(rubrica)}
+                                      className="w-full mt-2 text-[9px] font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-tighter flex items-center justify-center gap-1"
+                                    >
+                                      <Save size={10} /> Guardar na Base
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -5963,93 +6113,188 @@ export default function ActivityForm({
                           </div>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                          <div className="space-y-1">
-                            <label className="block text-[11px] font-bold text-blue-800 tracking-tight leading-tight ml-1">
-                              {isCombustivel
-                                ? "Total em Litros"
-                                : "Quantidade de Produtos"}
-                            </label>
-                            <input
-                              type="number"
-                              value={rubrica.quantidade || ""}
-                              disabled={isBlocked}
-                              readOnly={isCombustivelReadOnly}
-                              onChange={(e) => {
-                                if (isCombustivelReadOnly) return;
-                                const newRubricas = [...formData.rubricas];
-                                const qtd = Number(e.target.value);
-                                const valorTotal =
-                                  qtd * (rubrica.precoUnitario || 0);
+                        <div className="space-y-6">
+                          <div className="bg-[#f8fafc]/90 p-6 rounded-[28px] border border-slate-200/60 shadow-sm backdrop-blur-sm">
+                            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                              {/* Coluna 1: SELEÇÃO DE PRODUTO (3 colunas) */}
+                              <div className="xl:col-span-4 space-y-2.5">
+                                <label className="block text-[10px] font-black text-[#1e3a8a] uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
+                                  <DollarSign className="w-3.5 h-3.5 text-blue-600" />
+                                  SELEÇÃO DE PRODUTO/SERVIÇO (GESTÃO DE PREÇOS)
+                                </label>
+                                <div className="space-y-2.5">
+                                  <select
+                                    value={
+                                      products.some(p => p.nome === rubrica.nomeProduto)
+                                        ? rubrica.nomeProduto
+                                        : rubrica.nomeProduto === "__manual__" ? "__manual__" : ""
+                                    }
+                                    disabled={isBlocked}
+                                    onChange={(e) => {
+                                      const selectedProdName = e.target.value;
+                                      
+                                      if (selectedProdName === "__custom__") {
+                                        const newRubricas = [...formData.rubricas];
+                                        newRubricas[index] = {
+                                          ...rubrica,
+                                          nomeProduto: "__manual__",
+                                          precoUnitario: 0,
+                                          detalhes: "Unidade",
+                                          especificacao: "",
+                                          valorTotal: 0,
+                                        };
+                                        setFormData({ ...formData, rubricas: newRubricas });
+                                        return;
+                                      }
 
-                                // Generate manual specification for custom fuel amount
-                                let spec = rubrica.especificacao;
-                                if (isCombustivel) {
-                                  spec = `Combustível do tipo Gasóleo (${qtd} Litros x ${rubrica.precoUnitario || 125} MT) + 15% Margem (Oscilação/Desgaste)`;
-                                }
+                                      if (!selectedProdName) {
+                                        const newRubricas = [...formData.rubricas];
+                                        newRubricas[index] = {
+                                          ...rubrica,
+                                          nomeProduto: "",
+                                          precoUnitario: 0,
+                                          detalhes: "Unidade",
+                                          especificacao: "",
+                                          valorTotal: 0,
+                                        };
+                                        setFormData({ ...formData, rubricas: newRubricas });
+                                        return;
+                                      }
+                                      
+                                      const found = products.find((p: any) => p.nome === selectedProdName);
+                                      const newRubricas = [...formData.rubricas];
+                                      if (found) {
+                                        const prc = Number(found.preco) || 0;
+                                        const qtd = rubrica.quantidade || 1;
+                                        newRubricas[index] = {
+                                          ...rubrica,
+                                          nomeProduto: found.nome,
+                                          precoUnitario: prc,
+                                          detalhes: found.unidade || rubrica.detalhes || "Unidade",
+                                          especificacao: found.especificacao || rubrica.especificacao || "",
+                                          quantidade: qtd,
+                                          valorTotal: qtd * prc,
+                                        };
+                                      }
+                                      setFormData({ ...formData, rubricas: newRubricas });
+                                    }}
+                                    className="w-full px-4 py-3 bg-white border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 transition-all shadow-sm appearance-none"
+                                    style={{
+                                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%231e3a8a' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                                      backgroundPosition: "right 1rem center",
+                                      backgroundRepeat: "no-repeat",
+                                      backgroundSize: "1em 1em",
+                                    }}
+                                  >
+                                    <option value="">Selecione o produto...</option>
+                                    <optgroup label="Entrada Manual">
+                                      <option value="__custom__">➕ Outro (Inserir manualmente)...</option>
+                                    </optgroup>
+                                    <optgroup label="Produtos da Gestão de Preços">
+                                      {getFilteredProductsForRubrica(products, rubrica.rubrica, rubrica.necessidade).map((prod: any) => (
+                                        <option key={prod.nome} value={prod.nome}>
+                                          {prod.nome} — {Number(prod.preco || 0).toLocaleString("pt-MZ", { minimumFractionDigits: 2 })} MZN ({prod.unidade})
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  </select>
 
-                                newRubricas[index] = {
-                                  ...rubrica,
-                                  quantidade: qtd,
-                                  valorTotal: valorTotal,
-                                  especificacao: spec,
-                                };
-                                setFormData({
-                                  ...formData,
-                                  rubricas: newRubricas,
-                                });
-                              }}
-                              className={`w-full p-2.5 border-2 border-gray-300 rounded-xl text-[14px] font-bold outline-none focus:border-blue-900 transition-all h-11 ${isCombustivelReadOnly ? "bg-gray-50 text-blue-900" : "bg-white"}`}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="block text-[11px] font-bold text-blue-800 tracking-tight leading-tight ml-1">
-                              {isCombustivel
-                                ? "Preço/Litro (MZN)"
-                                : "Preço unitário (MZN)"}
-                            </label>
-                            <input
-                              type="number"
-                              value={rubrica.precoUnitario || ""}
-                              readOnly={isCombustivelReadOnly}
-                              disabled={isBlocked}
-                              onChange={(e) => {
-                                if (isCombustivelReadOnly) return;
-                                const newRubricas = [...formData.rubricas];
-                                const preco = Number(e.target.value);
-                                const valorTotal =
-                                  (rubrica.quantidade || 0) * preco;
+                                  {rubrica.nomeProduto === "__manual__" && (
+                                    <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                                      <input
+                                        type="text"
+                                        placeholder="Digite o nome do novo produto..."
+                                        autoFocus
+                                        onChange={(e) => {
+                                          const newRubricas = [...formData.rubricas];
+                                          newRubricas[index] = { ...rubrica, nomeProduto: e.target.value };
+                                          setFormData({ ...formData, rubricas: newRubricas });
+                                        }}
+                                        onBlur={() => {
+                                          if (rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && rubrica.nomeProduto.length > 2 && !products.some(p => p.nome === rubrica.nomeProduto)) {
+                                            collectProductFromRubric(rubrica);
+                                          }
+                                        }}
+                                        className="w-full px-4 py-3 bg-emerald-50 border-2 border-emerald-200 rounded-2xl text-[13px] font-black text-emerald-900 outline-none focus:border-emerald-500 transition-all shadow-sm placeholder:text-emerald-300"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                                <p className="text-[9px] text-blue-800/60 italic leading-tight mt-1.5">
+                                  {products.some(p => p.nome === rubrica.nomeProduto) ? "💡 Produto do catálogo." : "🚀 Manual: Será guardado na Gestão de Produtos."}
+                                </p>
+                              </div>
 
-                                // Generate manual specification for custom fuel price
-                                let spec = rubrica.especificacao;
-                                if (isCombustivel) {
-                                  spec = `Combustível do tipo Gasóleo (${rubrica.quantidade || 0} Litros x ${preco} MT) + 15% Margem (Oscilação/Desgaste)`;
-                                }
+                              {/* Coluna 2: QUANTIDADE (2 colunas) */}
+                              <div className="xl:col-span-2 space-y-2.5">
+                                <label className="block text-[10px] font-black text-[#1e3a8a] uppercase tracking-widest mb-1.5">
+                                  {isCombustivel ? "LITROS" : "QUANTIDADE"}
+                                </label>
+                                <input
+                                  type="number"
+                                  value={rubrica.quantidade || ""}
+                                  disabled={isBlocked}
+                                  onChange={(e) => {
+                                    const newRubricas = [...formData.rubricas];
+                                    const qtd = Number(e.target.value);
+                                    newRubricas[index] = {
+                                      ...rubrica,
+                                      quantidade: qtd,
+                                      valorTotal: qtd * (rubrica.precoUnitario || 0)
+                                    };
+                                    setFormData({ ...formData, rubricas: newRubricas });
+                                  }}
+                                  className="w-full px-4 py-3 bg-white border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 shadow-sm"
+                                />
+                              </div>
 
-                                newRubricas[index] = {
-                                  ...rubrica,
-                                  precoUnitario: preco,
-                                  valorTotal: valorTotal,
-                                  especificacao: spec,
-                                };
-                                setFormData({
-                                  ...formData,
-                                  rubricas: newRubricas,
-                                });
-                              }}
-                              className={`w-full p-2.5 border-2 border-gray-300 rounded-xl text-[14px] font-bold outline-none focus:border-blue-900 transition-all h-11 ${isCombustivelReadOnly ? "bg-gray-50 text-blue-900" : "bg-white"}`}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="block text-[11px] font-bold text-blue-800 tracking-tight leading-tight ml-1">
-                              {isCombustivel ? "Total (MZN)" : "Total em MZN"}
-                            </label>
-                            <div className="w-full p-2.5 bg-white border-2 border-blue-900/30 rounded-xl text-[14px] font-bold text-blue-900 flex items-center justify-start px-4 h-11">
-                              {rubrica.valorTotal?.toLocaleString("pt-MZ", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              }) || "0,00"}{" "}
-                              MZN
+                              {/* Coluna 3: PREÇO (2 colunas) */}
+                              <div className="xl:col-span-3 space-y-2.5">
+                                <label className="block text-[10px] font-black text-[#1e3a8a] uppercase tracking-widest mb-1.5">
+                                  PREÇO UNITÁRIO (MZN)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={rubrica.precoUnitario || ""}
+                                  disabled={isBlocked}
+                                  readOnly={!!rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && products.some(p => p.nome === rubrica.nomeProduto)}
+                                  onChange={(e) => {
+                                    const newRubricas = [...formData.rubricas];
+                                    const prc = Number(e.target.value);
+                                    newRubricas[index] = {
+                                      ...rubrica,
+                                      precoUnitario: prc,
+                                      valorTotal: (rubrica.quantidade || 0) * prc
+                                    };
+                                    setFormData({ ...formData, rubricas: newRubricas });
+                                  }}
+                                  onBlur={() => {
+                                    if (rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && !products.some(p => p.nome === rubrica.nomeProduto)) {
+                                      collectProductFromRubric(rubrica);
+                                    }
+                                  }}
+                                  className={`w-full px-4 py-3 border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 shadow-sm ${!!rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && products.some(p => p.nome === rubrica.nomeProduto) ? "bg-gray-50" : "bg-white"}`}
+                                />
+                                {!products.some(p => p.nome === rubrica.nomeProduto) && rubrica.nomeProduto && (
+                                  <button
+                                    type="button"
+                                    onClick={() => collectProductFromRubric(rubrica)}
+                                    className="text-[9px] font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-tighter flex items-center gap-1 mt-1"
+                                  >
+                                    <Save size={10} /> Guardar na Gestão
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Coluna 4: TOTAL (3 colunas) */}
+                              <div className="xl:col-span-3 space-y-2.5">
+                                <label className="block text-[10px] font-black text-[#1e3a8a] uppercase tracking-widest mb-1.5">
+                                  VALOR TOTAL
+                                </label>
+                                <div className="w-full py-3 px-4 bg-[#eff6ff] border-2 border-blue-200/50 rounded-2xl text-[14px] font-black text-blue-900 flex items-center justify-center shadow-inner h-[46px]">
+                                  {((rubrica.quantidade || 0) * (rubrica.precoUnitario || 0)).toLocaleString("pt-MZ", { minimumFractionDigits: 2 })} MZN
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -6644,6 +6889,15 @@ export default function ActivityForm({
                   );
 
                   try {
+                    // Sincronizar todos os produtos com a base de dados centralizada antes de guardar a atividade
+                    if (Array.isArray(formData.rubricas)) {
+                      formData.rubricas.forEach((rubrica: any) => {
+                        if (rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__") {
+                          collectProductFromRubric(rubrica);
+                        }
+                      });
+                    }
+
                     {
                       /* Limpar rascunho em background */
                     }

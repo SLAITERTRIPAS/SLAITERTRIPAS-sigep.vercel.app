@@ -157,12 +157,90 @@ export default function SubMenu({
   const [showArchiveView, setShowArchiveView] = useState(false);
 
   const totalActivitiesCount = matrixActivities.length;
-  const totalBudgetAmount = matrixActivities.reduce(
-    (sum, act) => sum + Number(act.valorTotal || act.valor || 0),
-    0
-  );
+
+  const isActivityInOrgan = (act: any, organTitle: string): boolean => {
+    if (!organTitle) return false;
+    const normalizeStr = (s: string) => {
+      if (!s) return "";
+      return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+    };
+    const normOrgan = normalizeStr(organTitle);
+    const actDir = normalizeStr(act.direcao || act.direccao || act.unidadeOrganica || "");
+    const actDep = normalizeStr(act.departamento || "");
+    const actRep = normalizeStr(act.reparticao || "");
+    const actSet = normalizeStr(act.setor || "");
+
+    if (normOrgan === "UNIDADE ORGANICA") {
+      const matchDir = ["DIVISAO DE ENGENHARIA", "CENTRO DE INCUBACAO DE EMPRESAS", "CENTROS", "UNIDADE ORGANICA", "CIE"];
+      return matchDir.some(d => actDir.includes(d) || actDep.includes(d) || actRep.includes(d) || actSet.includes(d));
+    }
+    if (normOrgan === "SERVICOS CENTRAIS") {
+      const matchDir = [
+        "DICOSAFA", "DICOSSER", "SERVICOS CENTRAIS", "FINANCAS", "RECURSOS HUMANOS", 
+        "REGISTO ACADEMICO", "BIBLIOTECA", "ASSUNTOS ESTUDANTIS", "PATRIMONIO", 
+        "SECRETARIA GERAL", "TIC", "LAR DE ESTUDANTES", "PRODUCAO ALIMENTAR"
+      ];
+      return matchDir.some(d => actDir.includes(d) || actDep.includes(d) || actRep.includes(d) || actSet.includes(d));
+    }
+    if (normOrgan === "ORGAO DE DIRECAO E GESTAO" || normOrgan === "ORGAO DE DIRECCAO E GESTAO") {
+      const matchDir = [
+        "GABINETE DO DIRETOR", "GABINETE DO DIRETOR-GERAL", "PLANIFICACAO", "ESTUDOS", 
+        "DPEP", "UGEA", "AQUISICOES", "COOPERACAO", "JURIDICO", "CONTROLO TECNICO", 
+        "CONSELHO", "ORGAO DE DIRECAO E GESTAO", "ORGAO DE DIRECCAO E GESTAO"
+      ];
+      return matchDir.some(d => actDir.includes(d) || actDep.includes(d) || actRep.includes(d) || actSet.includes(d));
+    }
+    return actDir.includes(normOrgan) || actDep.includes(normOrgan) || actRep.includes(normOrgan) || actSet.includes(normOrgan);
+  };
+
+  const totalBudgetAmount = matrixActivities.reduce((sum, act) => {
+    let actVal = 0;
+    let hasRub = false;
+    if (Array.isArray(act.rubricas) && act.rubricas.length > 0) {
+      const rSum = act.rubricas.reduce(
+        (acc: number, r: any) => acc + Number(r.valorTotal || r.total || r.valor || r.precoTotal || 0),
+        0
+      );
+      if (rSum > 0) {
+        actVal += rSum;
+        hasRub = true;
+      }
+    }
+    if (!hasRub) {
+      actVal += Number(act.valorTotal || act.valor || act.orcamentoTotal || act.valorTotal || 0);
+    }
+    return sum + actVal;
+  }, 0);
+
+  const organActivities = matrixActivities.filter(act => isActivityInOrgan(act, title));
+  const organActivitiesCount = organActivities.length;
+  const organBudgetAmount = organActivities.reduce((sum, act) => {
+    let actVal = 0;
+    let hasRub = false;
+    if (Array.isArray(act.rubricas) && act.rubricas.length > 0) {
+      const rSum = act.rubricas.reduce(
+        (acc: number, r: any) => acc + Number(r.valorTotal || r.total || r.valor || r.precoTotal || 0),
+        0
+      );
+      if (rSum > 0) {
+        actVal += rSum;
+        hasRub = true;
+      }
+    }
+    if (!hasRub) {
+      actVal += Number(act.valorTotal || act.valor || act.orcamentoTotal || act.valorTotal || 0);
+    }
+    return sum + actVal;
+  }, 0);
+
   const formattedBudget =
     totalBudgetAmount.toLocaleString("pt-MZ", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }) + " MZN";
+
+  const formattedOrganBudget =
+    organBudgetAmount.toLocaleString("pt-MZ", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }) + " MZN";
@@ -438,17 +516,28 @@ export default function SubMenu({
 
           {/* Action Buttons matching the requested layout */}
           <div className="flex flex-col items-center gap-3 mt-4 w-full max-w-xl mx-auto px-4">
-            {/* Teto Orçamental Button */}
+            {/* Teto do Órgão (Soma de todos os orçamentos por departamento) */}
             <button
-              onClick={() =>
-                onTetoOrcamental
-                  ? onTetoOrcamental()
-                  : onShowAlert("Teto Orçamental")
-              }
-              className="w-full flex items-center justify-center gap-2.5 bg-[#b91c1c] text-white px-6 py-3.5 rounded-2xl font-black text-xs sm:text-sm tracking-wider hover:bg-red-800 active:scale-95 touch-manipulation transition-all shadow-lg cursor-pointer"
+              onClick={() => {
+                if (onTetoOrcamental) {
+                  onTetoOrcamental();
+                } else {
+                  onShowAlert(`Teto Orçamental do Órgão ${title}: ${formattedOrganBudget}`);
+                }
+              }}
+              className="w-full flex items-center justify-center gap-3 bg-[#b91c1c] text-white px-6 py-3 rounded-2xl font-black tracking-wider hover:bg-red-800 active:scale-95 touch-manipulation transition-all shadow-md border border-red-600/30 cursor-pointer"
             >
-              <DollarSign size={20} />
-              <span>Teto Orçamental: {formattedBudget}</span>
+              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                <DollarSign size={18} className="text-white" />
+              </div>
+              <div className="text-left leading-tight">
+                <span className="text-[9px] uppercase tracking-widest block font-bold text-white/80">
+                  TETO DO ÓRGÃO ({title.toUpperCase()})
+                </span>
+                <span className="text-base sm:text-lg font-black text-white">
+                  {formattedOrganBudget}
+                </span>
+              </div>
             </button>
 
             {/* Bottom Row: Relatório Anual & Plano Setorial */}
@@ -474,7 +563,7 @@ export default function SubMenu({
                 className="flex-1 flex items-center justify-center gap-2 bg-purple-700 text-white px-4 py-3 rounded-2xl font-black text-xs tracking-wider hover:bg-purple-800 active:scale-95 touch-manipulation transition-all shadow-md cursor-pointer"
               >
                 <LayoutGrid size={18} />
-                <span>Plano Setorial ({totalActivitiesCount} Atividades)</span>
+                <span>Plano Setorial ({organActivitiesCount} Atividades)</span>
               </button>
             </div>
           </div>

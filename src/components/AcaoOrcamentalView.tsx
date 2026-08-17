@@ -435,6 +435,99 @@ export default function AcaoOrcamentalView({
     return isSuperBossUser(user) || isDPEPUser(user);
   }, [user]);
 
+  const orgaoDirecaoBreakdown: Record<string, { total: number; direcoes: Record<string, number> }> = useMemo(() => {
+    const map: {
+      [orgao: string]: {
+        total: number;
+        direcoes: { [direcao: string]: number };
+      };
+    } = {};
+
+    activities.forEach((act) => {
+      // Determinar Órgão
+      let orgao = String(
+        act.unidadeOrganica || act.orgao || act.unidade || "ISPS (Geral)"
+      ).trim();
+      if (!orgao || orgao === "undefined") {
+        orgao = "ISPS (Geral)";
+      }
+
+      // Padronizar os nomes mais comuns
+      if (
+        orgao.toUpperCase() === "ÓRGÃO" ||
+        orgao.toUpperCase() === "ORGAO" ||
+        orgao.toUpperCase() === "ÓRGAO"
+      ) {
+        orgao = "Órgão";
+      } else if (
+        orgao.toUpperCase() === "UNIDADE ORGÂNICA" ||
+        orgao.toUpperCase() === "UNIDADE ORGANICA"
+      ) {
+        orgao = "Unidade Orgânica";
+      } else if (orgao.toUpperCase() === "ISPS") {
+        orgao = "ISPS (Geral)";
+      }
+
+      // Determinar Direção
+      let direcao = String(
+        act.direcao || act.direccao || "Gabinete / Serviços Centrais"
+      ).trim();
+      if (!direcao || direcao === "undefined") {
+        direcao = "Gabinete / Serviços Centrais";
+      }
+
+      // Calcular o orçamento total desta atividade
+      let actVal = 0;
+      if (Array.isArray(act.rubricas) && act.rubricas.length > 0) {
+        const rSum = act.rubricas.reduce(
+          (s: number, r: any) =>
+            s +
+            Number(
+              r.valorTotal ||
+                r.total ||
+                r.valor ||
+                r.precoTotal ||
+                r.custo ||
+                Number(r.quantidade || r.qtd || 0) *
+                  Number(r.precoUnitario || r.valorUnitario || r.preco || 0) ||
+                0,
+            ),
+          0,
+        );
+        if (rSum > 0) {
+          actVal = rSum;
+        } else {
+          actVal = Number(
+            act.valor ||
+              act.orcamentoTotal ||
+              act.valorTotal ||
+              act.orcamento ||
+              act.custoTotal ||
+              0,
+          );
+        }
+      } else {
+        actVal = Number(
+          act.valor ||
+            act.orcamentoTotal ||
+            act.valorTotal ||
+            act.orcamento ||
+            act.custoTotal ||
+            0,
+        );
+      }
+
+      if (!map[orgao]) {
+        map[orgao] = { total: 0, direcoes: {} };
+      }
+
+      map[orgao].total += actVal;
+      map[orgao].direcoes[direcao] = (map[orgao].direcoes[direcao] || 0) + actVal;
+    });
+
+    return map;
+  }, [activities]);
+
   // Extrair unidades organizacionais por nível
   const levelUnits = useMemo(() => {
     const direcoes = new Set<string>();
@@ -1364,8 +1457,17 @@ export default function AcaoOrcamentalView({
     user?.departamento?.toUpperCase().includes("DAF") ||
     title?.toUpperCase().includes("DAF");
 
+  // Regra de Validade: Ação Orçamental é válida por 12 meses até 20 de Dezembro do ano corrente
+  const isBudgetExpired = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const limitDate = new Date(currentYear, 11, 20, 23, 59, 59); // 11 é Dezembro
+    return now > limitDate;
+  }, []);
+
   // Teto Orçamental a nível da Instituição (Global)
-  const tetoInstitucional = 50000000; // 50M MZN Institucional
+  const tetoInstitucionalBase = 50000000; // 50M MZN Institucional
+  const tetoInstitucional = isBudgetExpired ? 0 : tetoInstitucionalBase;
 
   const canEditTeto = useMemo(() => {
     const userDept = String(
@@ -1406,6 +1508,45 @@ export default function AcaoOrcamentalView({
   const [isEditingTeto, setIsEditingTeto] = useState(false);
   const [tempTetoInput, setTempTetoInput] = useState<string>("");
 
+  // Soma dos valores totais de planificação de todos os departamentos desta direção
+  const totalPlanificacaoDepartamentosDirecao = useMemo(() => {
+    const targetDirectionName = selectedLevel === "direcao" ? selectedUnit : title;
+    
+    const directionActivities = activities.filter((act) => {
+      const actDir = act.direcao || act.direccao || act.unidadeOrganica;
+      return matchesUnitStr(actDir, targetDirectionName);
+    });
+
+    return directionActivities.reduce((sum, act) => {
+      let actVal = 0;
+      let hasRub = false;
+
+      if (Array.isArray(act.rubricas) && act.rubricas.length > 0) {
+        const rSum = act.rubricas.reduce(
+          (acc: number, r: any) =>
+            acc + Number(r.valorTotal || r.total || r.valor || r.precoTotal || 0),
+          0
+        );
+        if (rSum > 0) {
+          actVal += rSum;
+          hasRub = true;
+        }
+      }
+
+      if (!hasRub) {
+        actVal += Number(
+          act.valor ||
+            act.orcamentoTotal ||
+            act.valorTotal ||
+            act.orcamento ||
+            act.custoTotal ||
+            0
+        );
+      }
+      return sum + actVal;
+    }, 0);
+  }, [activities, selectedLevel, selectedUnit, title]);
+
   // Determinar o teto orçamental estático padrão por nível hierárquico
   const defaultTeto = useMemo(() => {
     // Se não existirem atividades registadas/orçamentadas para este setor/departamento, limpa o valor (0 MZN)
@@ -1423,11 +1564,15 @@ export default function AcaoOrcamentalView({
       return 15000000; // 15M MZN
     } else if (
       titleUpper.includes("DIREÇÃO") ||
+      titleUpper.includes("DIRECCAO") ||
       titleUpper.includes("DIVISÃO") ||
+      titleUpper.includes("DIVISAO") ||
       titleUpper.includes("DICOSAFA") ||
-      titleUpper.includes("DICOSSER")
+      titleUpper.includes("DICOSSER") ||
+      selectedLevel === "direcao"
     ) {
-      return 5000000; // 5M MZN
+      // Regra de Negócio: O teto orçamental de uma direção é a soma dos valores totais de planificação de todos os seus departamentos
+      return totalPlanificacaoDepartamentosDirecao > 0 ? totalPlanificacaoDepartamentosDirecao : 5000000;
     } else if (
       titleUpper.includes("DEPARTAMENTO") ||
       titleUpper.includes("UNIDADE")
@@ -1436,9 +1581,9 @@ export default function AcaoOrcamentalView({
     } else {
       return 500000; // 500k MZN (Repartições / Setores)
     }
-  }, [title, sectorActivities.length]);
+  }, [title, sectorActivities.length, selectedLevel, totalPlanificacaoDepartamentosDirecao]);
 
-  const tetoMax = sectorActivities.length === 0 ? 0 : (customTeto > 0 ? customTeto : defaultTeto);
+  const tetoMax = isBudgetExpired ? 0 : (sectorActivities.length === 0 ? 0 : (customTeto > 0 ? customTeto : defaultTeto));
 
   const handleSaveTeto = async () => {
     const val = Number(tempTetoInput);
@@ -1709,6 +1854,9 @@ export default function AcaoOrcamentalView({
               <p className="text-xs text-slate-300">
                 Dotação orçamental máxima consolidada a nível institucional.
               </p>
+              <p className="text-[10px] text-amber-300 font-medium max-w-lg leading-relaxed mt-1">
+                ⚠️ <strong>Nota de Validade:</strong> A ação orçamental é válida por 12 meses até dia 20 de Dezembro do ano corrente. Após essa data, o teto fica zerado para nova planificação.
+              </p>
             </div>
             <div className="text-right bg-white/10 px-6 py-3 rounded-2xl border border-white/10">
               <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
@@ -1741,6 +1889,12 @@ export default function AcaoOrcamentalView({
                   Limite orçamental atribuído a este setor / direção para o
                   exercício atual.
                 </p>
+                {(title.toUpperCase().includes("DIREÇÃO") || title.toUpperCase().includes("DIRECCAO") || title.toUpperCase().includes("DICOSAFA") || title.toUpperCase().includes("DICOSSER") || selectedLevel === "direcao") && (
+                  <div className="mt-2 p-3 bg-blue-50/80 rounded-2xl border border-blue-100 text-[10px] text-blue-800 leading-relaxed font-medium">
+                    <span className="font-bold block text-[10px] uppercase tracking-wider mb-0.5 text-blue-900">💡 Regra de Teto (Direção):</span>
+                    O teto orçamental desta direção é a soma das planificações de todos os seus departamentos: <span className="font-bold underline">{totalPlanificacaoDepartamentosDirecao.toLocaleString()} MZN</span>.
+                  </div>
+                )}
               </div>
               {canEditTeto && (
                 <div className="pt-3 border-t border-blue-100">
@@ -1943,6 +2097,80 @@ export default function AcaoOrcamentalView({
               <div className="text-[10px] text-slate-400 mt-6 pt-4 border-t border-white/10 font-bold uppercase tracking-wider">
                 Última sincronização: Hoje
               </div>
+            </div>
+          </div>
+
+          {/* Distribuição do Orçamento Planificado por Órgão e Direção (MZN) */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                  📊 Orçamento Planificado por Órgão & Direção
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Distribuição detalhada e planeamento orçamental consolidado para cada órgão e respetivas direções subordinadas.
+                </p>
+              </div>
+              <div className="bg-slate-100 px-4 py-2 rounded-xl text-right">
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Total Geral Planificado</span>
+                <span className="text-sm font-black font-mono text-slate-900">
+                  {Object.values(orgaoDirecaoBreakdown).reduce((sum, item) => sum + item.total, 0).toLocaleString()} MZN
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {Object.entries(orgaoDirecaoBreakdown).map(([orgaoName, orgaoData]) => (
+                <div key={orgaoName} className="bg-slate-50/50 p-5 rounded-2xl border border-slate-200/50 flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex justify-between items-center border-b border-slate-200/55 pb-2.5">
+                      <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                        🏢 {orgaoName}
+                      </span>
+                      <span className="text-xs font-black font-mono text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">
+                        {orgaoData.total.toLocaleString()} MZN
+                      </span>
+                    </div>
+
+                    <div className="mt-3.5 space-y-3">
+                      {Object.entries(orgaoData.direcoes).map(([direcaoName, direcaoTotal]) => {
+                        const sharePercent = orgaoData.total > 0 ? (direcaoTotal / orgaoData.total) * 105 : 0;
+                        const finalPercent = Math.min(100, sharePercent);
+                        return (
+                          <div key={direcaoName} className="space-y-1">
+                            <div className="flex justify-between items-center text-[11px] font-bold text-slate-600">
+                              <span className="truncate pr-2" title={direcaoName}>📁 {direcaoName}</span>
+                              <span className="font-mono text-slate-900 shrink-0">{direcaoTotal.toLocaleString()} MZN</span>
+                            </div>
+                            <div className="w-full bg-slate-200/70 h-2 rounded-full overflow-hidden flex">
+                              <div
+                                className="bg-[#7c3aed] h-full rounded-full transition-all duration-500"
+                                style={{ width: `${finalPercent}%` }}
+                                title={`${finalPercent.toFixed(1)}% do orçamento de ${orgaoName}`}
+                              />
+                            </div>
+                            <div className="text-[9px] text-slate-400 font-bold text-right">
+                              {((direcaoTotal / orgaoData.total) * 100).toFixed(1)}% do Órgão
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {Object.keys(orgaoData.direcoes).length === 0 && (
+                        <p className="text-[11px] text-slate-400 italic text-center py-2">
+                          Nenhuma direção com orçamento planeado neste órgão.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {Object.keys(orgaoDirecaoBreakdown).length === 0 && (
+                <div className="col-span-full py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  <p className="text-xs text-slate-500 italic">
+                    Nenhuma atividade registada para gerar a distribuição de orçamento.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

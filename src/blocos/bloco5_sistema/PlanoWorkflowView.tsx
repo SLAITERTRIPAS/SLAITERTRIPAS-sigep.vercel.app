@@ -48,6 +48,8 @@ import {
   ShieldCheck,
   ArrowLeft,
   Globe,
+  DollarSign,
+  ExternalLink,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { motion, AnimatePresence } from "motion/react";
@@ -1832,6 +1834,22 @@ export default function PlanoWorkflowView({
           ? initialSubTab
           : "necessidades_quantidades",
   );
+
+  const isBudgetPeriodValid = useMemo(() => {
+    const now = new Date();
+    const month = now.getMonth() + 1; // 1-indexed (Jan=1, Dec=12)
+    const day = now.getDate();
+    
+    // Regra: Válido desde Março do ano em planificação até 1 de Dezembro
+    // Se estiver antes de Março ou após 1 de Dezembro, o teto fica zerado/inválido
+    if (month < 3) return false;
+    if (month === 12 && day > 1) return false;
+    if (month > 12) return false;
+    
+    return true;
+  }, []);
+
+  const isBudgetVisible = activeSubTab === "plano_setorial" || activeSubTab === "necessidades_quantidades" || workflowMode === "landing";
 
   useEffect(() => {
     setWorkflowMode("landing");
@@ -4508,10 +4526,45 @@ export default function PlanoWorkflowView({
                   BEM VINDO À GESTÃO DE PLANOS
                 </h2>
 
-                <div className="bg-slate-900 text-slate-100 p-6 md:p-8 rounded-2xl border border-slate-800 text-left mb-8 shadow-inner">
+                <div className="bg-slate-900 text-slate-100 p-6 md:p-8 rounded-2xl border border-slate-800 text-left mb-8 shadow-inner relative group">
                   <p className="text-xs md:text-sm font-bold leading-relaxed uppercase tracking-wide text-slate-200">
                     ESTE CAMPO É DEDICADO PARA GERIR TODOS OS PLANOS QUE FORAM SUBMETIDOS AO NÍVEL DA DIRECÇÃO, VISTO QUE SÓ AS DIRECÇÕES QUE SUBMETEM OS PLANOS AO DPEP PODEM PLANIFICAR NOVAS ATIVIDADES E CONSULTAR AS ATIVIDADES PLANIFICADAS POR SI.
                   </p>
+
+                  {/* TETO ORÇAMENTAL INSTITUCIONAL NA CAPA PRINCIPAL */}
+                  <div 
+                    onClick={() => {
+                      setWorkflowMode("consulting");
+                      setActiveSubTab("necessidades_quantidades");
+                    }}
+                    className="mt-6 p-5 bg-gradient-to-br from-indigo-950 to-slate-950 rounded-2xl border border-indigo-500/30 shadow-2xl cursor-pointer hover:border-indigo-400 transition-all group/budget"
+                  >
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">
+                        Teto Orçamental Institucional ({selectedYear})
+                      </span>
+                      <div className="p-1.5 bg-indigo-500/10 rounded-lg text-indigo-400 group-hover/budget:scale-110 transition-transform">
+                        <DollarSign size={14} />
+                      </div>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-black text-white tracking-tighter">
+                        {isBudgetPeriodValid ? totalInstitutionalBudget.toLocaleString("pt-MZ", {
+                          style: "currency",
+                          currency: "MZN",
+                        }) : "0,00 MZN"}
+                      </span>
+                      {!isBudgetPeriodValid && (
+                        <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest animate-pulse">
+                          (Teto Expirado/Aguardando Março)
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-3 text-[10px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-2">
+                      <Info size={12} className="text-indigo-400" /> Clique para ver o resumo das rúbricas e necessidades
+                    </p>
+                  </div>
+
                   <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-300 font-semibold">
                     <div className="flex items-start gap-2 bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
@@ -5139,7 +5192,8 @@ export default function PlanoWorkflowView({
                                               onToggleSelect={
                                                 handleToggleSelectActivity
                                               }
-                                              
+                                              isBudgetVisible={isBudgetVisible}
+                                              isBudgetPeriodValid={isBudgetPeriodValid}
                                             />
                                           ),
                                         )}
@@ -5272,7 +5326,8 @@ export default function PlanoWorkflowView({
                               rawActivities={rawActivities}
                               selectedActivityIds={selectedActivityIds}
                               onToggleSelect={handleToggleSelectActivity}
-                              
+                              isBudgetVisible={isBudgetVisible}
+                              isBudgetPeriodValid={isBudgetPeriodValid}
                           />
                         ))}
                         {filteredActivities.filter(
@@ -5378,18 +5433,24 @@ export default function PlanoWorkflowView({
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-4">
-                    <div className="bg-slate-800/90 border border-slate-700/80 p-4 rounded-xl text-right min-w-[200px]">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                        Atividades (Sem Salários)
-                      </span>
-                      <span className="text-xl font-black text-emerald-400 font-mono">
-                        {deptBudgetTotal.toLocaleString("pt-MZ", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}{" "}
-                        MZN
-                      </span>
-                      <span className="text-[10px] text-slate-400 block mt-1">
+                      <div className="bg-slate-800/90 border border-slate-700/80 p-4 rounded-xl text-right min-w-[200px]">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Atividades (Sem Salários)
+                        </span>
+                        {(activeSubTab === "plano_setorial" || workflowMode === "landing") ? (
+                          <span className="text-xl font-black text-emerald-400 font-mono">
+                            {isBudgetPeriodValid ? deptBudgetTotal.toLocaleString("pt-MZ", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }) : "0,00"}{" "}
+                            MZN
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-widest italic">
+                            Oculto conforme política
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400 block mt-1">
                         {
                           filteredActivities.filter((a) => !isSalaryActivity(a))
                             .length
@@ -5459,7 +5520,8 @@ export default function PlanoWorkflowView({
                                 rawActivities={rawActivities}
                                 selectedActivityIds={selectedActivityIds}
                                 onToggleSelect={handleToggleSelectActivity}
-                                
+                                isBudgetVisible={isBudgetVisible}
+                                isBudgetPeriodValid={isBudgetPeriodValid}
                               />
                             ))}
                           {filteredActivities.filter((a) => isActivityInScope(a)).length === 0 && (
@@ -5560,7 +5622,8 @@ export default function PlanoWorkflowView({
                                     getActivityTotal={getActivityTotal}
                                     onUpdateExecution={onUpdateExecution}
                                     onUpdateRelatorio={onUpdateRelatorio}
-                                    
+                                    isBudgetVisible={isBudgetVisible}
+                                    isBudgetPeriodValid={isBudgetPeriodValid}
                                   />
                                 ))}
                                 {sectorActs.length === 0 && (
@@ -5649,10 +5712,12 @@ export default function PlanoWorkflowView({
                   </h2>
                   <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tight font-serif text-emerald-900">
                     ORÇAMENTO DAS ATIVIDADES ({" "}
-                    {totalDirectionBudget.toLocaleString("pt-MZ", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}{" "}
+                    {(activeSubTab === "plano_setorial" || workflowMode === "landing") ? (
+                      isBudgetPeriodValid ? totalDirectionBudget.toLocaleString("pt-MZ", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }) : "0,00"
+                    ) : "---"}{" "}
                     MZN )
                   </h2>
                   {directionSalaryBudget > 0 && (
@@ -5690,13 +5755,19 @@ export default function PlanoWorkflowView({
                         <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
                           Orçamento das Atividades (Sem Salários)
                         </span>
-                        <span className="text-2xl font-black text-amber-400 font-mono">
-                          {totalDirectionBudget.toLocaleString("pt-MZ", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}{" "}
-                          MZN
-                        </span>
+                        {(activeSubTab === "plano_setorial" || workflowMode === "landing") ? (
+                          <span className="text-2xl font-black text-amber-400 font-mono">
+                            {isBudgetPeriodValid ? totalDirectionBudget.toLocaleString("pt-MZ", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }) : "0,00"}{" "}
+                            MZN
+                          </span>
+                        ) : (
+                          <span className="text-sm font-bold text-slate-400 uppercase tracking-widest italic">
+                            Oculto nesta área
+                          </span>
+                        )}
                       </div>
                       {directionSalaryBudget > 0 && (
                         <div className="border-t border-white/10 pt-2">
@@ -5740,10 +5811,10 @@ export default function PlanoWorkflowView({
                             </span>
                           </div>
                           <span className="text-xs font-mono font-black text-emerald-400 shrink-0">
-                            {d.budget.toLocaleString("pt-MZ", {
+                            {isBudgetVisible ? (isBudgetPeriodValid ? d.budget.toLocaleString("pt-MZ", {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
-                            })}{" "}
+                            }) : "0,00") : "OCULTO"}{" "}
                             MZN
                           </span>
                         </div>
@@ -5813,10 +5884,10 @@ export default function PlanoWorkflowView({
                             <div className="bg-white/5 border border-white/10 p-4 rounded-xl text-right">
                                 <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Atividades (Sem Salários)</div>
                                 <div className="text-lg font-black text-emerald-400 font-mono">
-                                    {deptActs.reduce((acc, a) => acc + getActivityTotal(a), 0).toLocaleString("pt-MZ", {
+                                    {isBudgetVisible ? (isBudgetPeriodValid ? deptActs.reduce((acc, a) => acc + getActivityTotal(a), 0).toLocaleString("pt-MZ", {
                                     minimumFractionDigits: 2,
                                     maximumFractionDigits: 2,
-                                    })}{" "}
+                                    }) : "0,00") : "OCULTO"}{" "}
                                     MZN
                                 </div>
                                 <div className="text-[9px] text-slate-400 mt-0.5">{deptActs.length} {deptActs.length === 1 ? "Atividade" : "Atividades"}</div>
@@ -5839,7 +5910,8 @@ export default function PlanoWorkflowView({
                                       getActivityTotal={getActivityTotal}
                                       onUpdateExecution={onUpdateExecution}
                                       onUpdateRelatorio={onUpdateRelatorio}
-                                      
+                                      isBudgetVisible={isBudgetVisible}
+                                      isBudgetPeriodValid={isBudgetPeriodValid}
                                     />
                                   ))}
                                   {deptActs.length === 0 && (
@@ -5918,6 +5990,8 @@ export default function PlanoWorkflowView({
                                 rawActivities={rawActivities}
                                 selectedActivityIds={selectedActivityIds}
                                 onToggleSelect={handleToggleSelectActivity}
+                                isBudgetVisible={isBudgetVisible}
+                                isBudgetPeriodValid={isBudgetPeriodValid}
                               />
                             ))}
                             {filteredActivities.length === 0 && (
@@ -6158,10 +6232,10 @@ export default function PlanoWorkflowView({
                                 <div className="bg-white/5 border border-white/10 p-4 rounded-xl text-right">
                                   <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total da Repartição</div>
                                   <div className="text-lg font-black text-emerald-400 font-mono">
-                                    {repTotalBudget.toLocaleString("pt-MZ", {
+                                    {isBudgetVisible ? (isBudgetPeriodValid ? repTotalBudget.toLocaleString("pt-MZ", {
                                       minimumFractionDigits: 2,
                                       maximumFractionDigits: 2,
-                                    })}{" "}
+                                    }) : "0,00") : "OCULTO"}{" "}
                                     MZN
                                   </div>
                                   <div className="text-[9px] text-slate-400 mt-0.5">{activities.length} {activities.length === 1 ? "Atividade" : "Atividades"}</div>
@@ -6183,6 +6257,8 @@ export default function PlanoWorkflowView({
                                         getActivityTotal={getActivityTotal}
                                         onUpdateExecution={onUpdateExecution}
                                         onUpdateRelatorio={onUpdateRelatorio}
+                                        isBudgetVisible={isBudgetVisible}
+                                        isBudgetPeriodValid={isBudgetPeriodValid}
                                       />
                                     ))}
                                   </tbody>
@@ -6249,10 +6325,10 @@ export default function PlanoWorkflowView({
                                 <div className="bg-white/5 border border-white/10 p-4 rounded-xl text-right">
                                   <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total do Departamento</div>
                                   <div className="text-lg font-black text-emerald-400 font-mono">
-                                    {deptTotalBudget.toLocaleString("pt-MZ", {
+                                    {isBudgetVisible ? (isBudgetPeriodValid ? deptTotalBudget.toLocaleString("pt-MZ", {
                                       minimumFractionDigits: 2,
                                       maximumFractionDigits: 2,
-                                    })}{" "}
+                                    }) : "0,00") : "OCULTO"}{" "}
                                     MZN
                                   </div>
                                   <div className="text-[9px] text-slate-400 mt-0.5">{activities.length} {activities.length === 1 ? "Atividade" : "Atividades"}</div>
@@ -6274,6 +6350,8 @@ export default function PlanoWorkflowView({
                                         getActivityTotal={getActivityTotal}
                                         onUpdateExecution={onUpdateExecution}
                                         onUpdateRelatorio={onUpdateRelatorio}
+                                        isBudgetVisible={isBudgetVisible}
+                                        isBudgetPeriodValid={isBudgetPeriodValid}
                                       />
                                     ))}
                                   </tbody>
@@ -6307,47 +6385,59 @@ export default function PlanoWorkflowView({
                               departamento.
                             </p>
                           </div>
-                          <div className="bg-white/10 p-5 rounded-2xl border border-white/10 backdrop-blur-md text-right min-w-[280px] space-y-3">
-                            <div>
-                              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
-                                Orçamento das Atividades (Sem Salários)
-                              </span>
-                              <span className="text-2xl font-black text-emerald-400 font-mono">
-                                {totalInstitutionalBudget.toLocaleString(
-                                  "pt-MZ",
-                                  {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  },
-                                )}{" "}
-                                MZN
-                              </span>
+                              <div 
+                                onClick={() => setActiveSubTab("necessidades_quantidades")}
+                                className="bg-white/10 p-5 rounded-2xl border border-white/10 backdrop-blur-md text-right min-w-[280px] space-y-3 cursor-pointer hover:bg-white/20 transition-all group"
+                              >
+                                <div>
+                                  <div className="flex items-center justify-end gap-2 mb-1">
+                                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
+                                      Orçamento das Atividades (Sem Salários)
+                                    </span>
+                                    <ExternalLink size={12} className="text-slate-400 group-hover:text-white" />
+                                  </div>
+                                  <span className="text-2xl font-black text-emerald-400 font-mono">
+                                    {isBudgetPeriodValid 
+                                      ? totalInstitutionalBudget.toLocaleString("pt-MZ", {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        }) 
+                                      : "0,00"}{" "}
+                                    MZN
+                                  </span>
+                                  {!isBudgetPeriodValid && (
+                                    <div className="text-[9px] font-black text-rose-400 uppercase tracking-widest mt-1 animate-pulse">
+                                      Expirado (Fica zerado até Março)
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="border-t border-white/10 pt-2 text-right">
+                                  <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
+                                    Orçamento Geral Consolidado (Com Salário via Receitas Próprias)
+                                  </span>
+                                  <span className="text-2xl font-black text-amber-400 font-mono">
+                                    {(
+                                      (isBudgetPeriodValid ? totalInstitutionalBudget : 0) +
+                                      (salarioStats.rawReceitasProprias || 0)
+                                    ).toLocaleString("pt-MZ", {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}{" "}
+                                    MZN
+                                  </span>
+                                  <span className="text-[9px] text-slate-300 block mt-0.5">
+                                    Nota: Salários pagos pelo Estado são informados separadamente e não entram no orçamento de atividades.
+                                  </span>
+                                </div>
+                                <span className="text-[9px] text-slate-300 block mt-1 font-bold text-right">
+                                  Consolidação de{" "}
+                                  {institutionalDirectionsBreakdown.length} Direções
+                                  + Quadro Geral
+                                </span>
+                              </div>
                             </div>
-                            <div className="border-t border-white/10 pt-2">
-                              <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
-                                Orçamento Geral Consolidado (Com Salário via Receitas Próprias)
-                              </span>
-                              <span className="text-2xl font-black text-amber-400 font-mono">
-                                {(
-                                  totalInstitutionalBudget +
-                                  (salarioStats.rawReceitasProprias || 0)
-                                ).toLocaleString("pt-MZ", {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}{" "}
-                                MZN
-                              </span>
-                              <span className="text-[9px] text-slate-300 block mt-0.5">
-                                Nota: Salários pagos pelo Estado são informados separadamente e não entram no orçamento de atividades.
-                              </span>
-                            </div>
-                            <span className="text-[9px] text-slate-300 block mt-1 font-bold">
-                              Consolidação de{" "}
-                              {institutionalDirectionsBreakdown.length} Direções
-                              + Quadro Geral
-                            </span>
                           </div>
-                        </div>
 
                         {/* Direções Breakdown */}
                         <div>
@@ -6425,9 +6515,8 @@ export default function PlanoWorkflowView({
                             )}
                           </div>
                         </div>
-                      </div>
 
-                      <div className="bg-white border border-slate-200 rounded-3xl p-10 shadow-xl shadow-slate-100/50">
+                        <div className="bg-white border border-slate-200 rounded-3xl p-10 shadow-xl shadow-slate-100/50">
                         <div className="pb-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start gap-6">
                           <div className="flex-1">
                             <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-2">
@@ -6564,7 +6653,8 @@ export default function PlanoWorkflowView({
                                             user={user}
                                             isBossOrAdmin={isBossOrAdmin}
                                             getActivityTotal={getActivityTotal}
-                                            
+                                            isBudgetVisible={isBudgetVisible}
+                                            isBudgetPeriodValid={isBudgetPeriodValid}
                                           />
                                         ))}
                                       </React.Fragment>
@@ -6579,145 +6669,83 @@ export default function PlanoWorkflowView({
                     </div>
                   )}
 
-                  {/* SUB-TAB: PLANO E ORÇAMENTO */}
-                  {activeSubTab === "plano_orcamento" && (
-                    <div className="space-y-2 print:block">
+                  {/* SUB-TAB: NECESSIDADES E QUANTIDADES (RESUMO POR RÚBRICA) */}
+                  {activeSubTab === "necessidades_quantidades" && (
+                    <div className="space-y-8 print:block">
                       <div className="bg-white border border-slate-200 rounded-3xl p-10 shadow-xl shadow-slate-100/50">
                         <div className="pb-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start gap-6">
                           <div className="flex-1">
                             <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-2">
-                              Plano e Orçamento
+                              Resumo de Rúbricas e Necessidades
                             </h2>
                             <p className="text-slate-500 text-xs italic font-medium">
-                              Plano resumido com N/O, Código da Atividade, Nome
-                              da Atividade, Mês de Realização e Orçamento da
-                              Atividade.
+                              Consolidação de todos os itens e rúbricas planificadas para o ano de {selectedYear}.
                             </p>
                           </div>
-                          <div className="bg-slate-900 text-white p-5 rounded-2xl text-right min-w-[260px]">
-                            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">
-                              Orçamento Total do Plano
+                          <div className="bg-indigo-900 text-white p-5 rounded-2xl text-right min-w-[260px]">
+                            <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider block">
+                              Total Geral Planificado
                             </span>
                             <span className="text-2xl font-black text-emerald-400 font-mono">
-                              {filteredActivities
-                                .filter(
-                                  (a) =>
-                                    (a.status as any) === "planificacao" &&
-                                    !a.isPESOE &&
-                                    (
-                                      isSuperBossUser(user) ||
-                                      a.direcao === user.direcao),
-                                )
-                                .reduce(
-                                  (sum, act) => sum + getActivityTotal(act),
-                                  0,
-                                )
-                                .toLocaleString("pt-MZ", {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}{" "}
-                              MZN
+                              {isBudgetPeriodValid ? totalInstitutionalBudget.toLocaleString("pt-MZ", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              }) : "0,00"} MZN
                             </span>
                           </div>
                         </div>
 
-                        <div className="mt-3 overflow-x-auto print:overflow-visible border border-slate-200 rounded-3xl shadow-sm mb-3">
+                        <div className="mt-8 overflow-x-auto border border-slate-200 rounded-3xl shadow-sm">
                           <table className="w-full text-left border-collapse font-sans text-xs">
                             <thead>
                               <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
-                                <th className="p-4 text-center w-16 border-r border-slate-800">
-                                  N/O
-                                </th>
-                                <th className="p-4 w-48 border-r border-slate-800">
-                                  CÓDIGO DA ATIVIDADE
-                                </th>
-                                <th className="p-4 border-r border-slate-800">
-                                  NOME DA ATIVIDADE
-                                </th>
-                                <th className="p-4 w-40 border-r border-slate-800 text-center">
-                                  MÊS DE REALIZAÇÃO
-                                </th>
-                                <th className="p-4 w-48 text-right">
-                                  ORÇAMENTO DA ATIVIDADE
-                                </th>
+                                <th className="p-4 border-r border-slate-800">Rúbrica / Classificador</th>
+                                <th className="p-4 border-r border-slate-800">Item / Descrição</th>
+                                <th className="p-4 border-r border-slate-800 text-center w-24">Quant. Total</th>
+                                <th className="p-4 text-right w-48">Total Planificado</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-200 text-slate-700 font-medium">
-                              {filteredActivities
-                                .filter(
-                                  (a) =>
-                                    (a.status as any) === "planificacao" &&
-                                    !a.isPESOE &&
-                                    (
-                                      isSuperBossUser(user) ||
-                                      a.direcao === user.direcao),
-                                )
-                                .filter(Boolean).map((activity, idx) => {
-                                  const totalVal = getActivityTotal(activity);
-                                  const code =
-                                    activity.codigoAtividade ||
-                                    activity.referencia ||
-                                    activity.codigo ||
-                                    "---";
-                                  const name =
-                                    activity.nomeAtividade ||
-                                    activity.title ||
-                                    activity.designacao ||
-                                    "---";
-                                  const month = Array.isArray(
-                                    activity.mesesRealizacao,
-                                  )
-                                    ? activity.mesesRealizacao.join(", ")
-                                    : activity.mesRealizacao ||
-                                      activity.mes ||
-                                      "-";
-                                  const no =
-                                    getActivityDisplayNo(activity) || idx + 1;
+                            <tbody className="divide-y divide-slate-200">
+                              {(() => {
+                                const rubricSummary: Record<string, { rubrica: string; item: string; quantidade: number; total: number }> = {};
+                                
+                                filteredActivities.forEach(act => {
+                                  if (act.rubricas && Array.isArray(act.rubricas)) {
+                                    act.rubricas.forEach((r: any) => {
+                                      const key = `${r.rubrica}-${r.item}`;
+                                      const total = (Number(r.quantidade) || Number(r.numeroPessoas) || 0) * (Number(r.precoUnitario) || 0);
+                                      if (!rubricSummary[key]) {
+                                        rubricSummary[key] = { rubrica: r.rubrica, item: r.item, quantidade: 0, total: 0 };
+                                      }
+                                      rubricSummary[key].quantidade += (Number(r.quantidade) || Number(r.numeroPessoas) || 0);
+                                      rubricSummary[key].total += total;
+                                    });
+                                  }
+                                });
 
+                                const items = Object.values(rubricSummary).sort((a, b) => a.rubrica.localeCompare(b.rubrica));
+
+                                if (items.length === 0) {
                                   return (
-                                    <tr
-                                      key={activity.id || idx}
-                                      className="hover:bg-slate-50 transition-colors"
-                                    >
-                                      <td className="p-4 text-center font-bold text-slate-900 border-r border-slate-200">
-                                        {no}
-                                      </td>
-                                      <td className="p-4 font-mono font-bold text-indigo-700 border-r border-slate-200">
-                                        {code}
-                                      </td>
-                                      <td className="p-4 font-bold text-slate-900 border-r border-slate-200">
-                                        {name}
-                                      </td>
-                                      <td className="p-4 text-center font-semibold text-slate-600 border-r border-slate-200">
-                                        {month}
-                                      </td>
-                                      <td className="p-4 text-right font-mono font-bold text-emerald-700">
-                                        {totalVal.toLocaleString("pt-MZ", {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2,
-                                        })}{" "}
-                                        MZN
+                                    <tr>
+                                      <td colSpan={4} className="p-12 text-center text-slate-400 italic font-medium">
+                                        Nenhuma rúbrica ou item detalhado encontrado no plano.
                                       </td>
                                     </tr>
                                   );
-                                })}
-                              {filteredActivities.filter(
-                                (a) =>
-                                  (a.status as any) === "planificacao" &&
-                                  !a.isPESOE &&
-                                  (
-                                    isSuperBossUser(user) ||
-                                    isActivityInScope(a)),
-                              ).length === 0 && (
-                                <tr>
-                                  <td
-                                    colSpan={18}
-                                    className="p-12 text-center text-slate-400 italic font-medium"
-                                  >
-                                    Nenhuma atividade encontrada.
-                                  </td>
-                                </tr>
-                              )}
+                                }
+
+                                return items.map((item, idx) => (
+                                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                    <td className="p-4 font-bold text-slate-900 border-r border-slate-200 uppercase">{item.rubrica || "Geral"}</td>
+                                    <td className="p-4 text-slate-700 border-r border-slate-200">{item.item || "---"}</td>
+                                    <td className="p-4 text-center font-bold text-slate-600 border-r border-slate-200">{item.quantidade}</td>
+                                    <td className="p-4 text-right font-mono font-black text-emerald-700 bg-emerald-50/30">
+                                      {item.total.toLocaleString("pt-MZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MZN
+                                    </td>
+                                  </tr>
+                                ));
+                              })()}
                             </tbody>
                           </table>
                         </div>
@@ -6828,10 +6856,13 @@ export default function PlanoWorkflowView({
                                       {dirActivities.length} {dirActivities.length === 1 ? "Atividade" : "Atividades"}
                                     </span>
                                     <span className="text-[11px] font-mono font-black text-emerald-300 bg-emerald-950/80 px-2.5 py-1 rounded-md border border-emerald-500/30">
-                                      Orçamento: {dirBudget.toLocaleString("pt-MZ", {
-                                        minimumFractionDigits: 2,
-                                        maximumFractionDigits: 2,
-                                      })} MZN
+                                      Orçamento: {(activeSubTab === "plano_setorial" || workflowMode === "landing") ? (
+                                        isBudgetPeriodValid ? dirBudget.toLocaleString("pt-MZ", {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        }) : "0,00"
+                                      ) : "OCULTO"}{" "}
+                                      MZN
                                     </span>
                                   </div>
                                 </div>
@@ -6858,6 +6889,8 @@ export default function PlanoWorkflowView({
                                           rawActivities={rawActivities}
                                           selectedActivityIds={selectedActivityIds}
                                           onToggleSelect={handleToggleSelectActivity}
+                                          isBudgetVisible={isBudgetVisible}
+                                          isBudgetPeriodValid={isBudgetPeriodValid}
                                         />
                                       ))}
                                       {dirActivities.length === 0 && (
@@ -7046,6 +7079,8 @@ export default function PlanoWorkflowView({
                                     user={user}
                                     isBossOrAdmin={isBossOrAdmin}
                                     getActivityTotal={getActivityTotal}
+                                    isBudgetVisible={isBudgetVisible}
+                                    isBudgetPeriodValid={isBudgetPeriodValid}
                                   />
                                 ))}
                               </React.Fragment>

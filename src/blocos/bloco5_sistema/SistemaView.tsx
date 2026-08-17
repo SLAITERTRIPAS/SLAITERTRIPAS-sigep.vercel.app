@@ -586,7 +586,7 @@ export default function SistemaView({
 
   const handleGeneralSystemCleanup = async () => {
     const confirmMsg =
-      "⚠️ LIMPEZA GERAL DE REPETIÇÃO E SOBREPOSIÇÃO: Esta ação varrerá a base de dados para detetar e remover colaboradores duplicados, atividades duplicadas (resequenciando os códigos) e fornecedores duplicados, preservando rigorosamente todas as informações essenciais. Deseja continuar?";
+      "⚠️ LIMPEZA GERAL DE REPETIÇÃO E SOBREPOSIÇÃO: Esta ação varrerá a base de dados para detetar e remover colaboradores duplicados, atividades duplicadas (resequenciando os códigos) e fornecedores duplicados, além de limpar rascunhos vazios, alertas antigos e cache de memória. Todas as informações essenciais serão rigorosamente preservadas. Deseja continuar?";
     if (!window.confirm(confirmMsg)) return;
 
     setIsCleaning(true);
@@ -595,7 +595,14 @@ export default function SistemaView({
       const res = await firestoreService.generalSystemCleanup();
       if (res.success) {
         alert(
-          `Limpeza Geral Concluída com Sucesso!\n\n- Colaboradores duplicados removidos: ${res.collaboratorsDeleted}\n- Atividades/Matrizes sobrepostas removidas: ${res.matrixRemoved}\n- Atividades duplicadas removidas: ${res.activitiesDeleted}\n- Fornecedores duplicados removidos: ${res.suppliersDeleted}`,
+          `Limpeza Geral Concluída com Sucesso!\n\n` +
+          `- Colaboradores duplicados removidos: ${res.collaboratorsDeleted}\n` +
+          `- Atividades/Matrizes sobrepostas removidas: ${res.matrixRemoved}\n` +
+          `- Atividades duplicadas removidas: ${res.activitiesDeleted}\n` +
+          `- Fornecedores duplicados removidos: ${res.suppliersDeleted}\n` +
+          `- Rascunhos vazios limpos: ${res.draftsDeleted || 0}\n` +
+          `- Alertas antigos de segurança limpos: ${res.alertsDeleted || 0}\n` +
+          `- Memória cache local otimizada e redefinida: ${res.cacheCleared ? "Sim" : "Não"}`
         );
         window.location.reload();
       } else {

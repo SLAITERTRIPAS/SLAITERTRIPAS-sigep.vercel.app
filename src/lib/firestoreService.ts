@@ -1313,6 +1313,56 @@ export const firestoreService = {
         }
       }
 
+      // 5. Clean empty or stale drafts
+      let draftsDeletedCount = 0;
+      try {
+        const draftSnapshot = await getDocs(collection(db, "drafts"));
+        for (const docItem of draftSnapshot.docs) {
+          const data = docItem.data() || {};
+          const isDraftEmpty = !data.title && !data.nomeAtividade && !data.designacao && !data.name;
+          if (isDraftEmpty) {
+            await deleteDoc(doc(db, "drafts", docItem.id));
+            draftsDeletedCount++;
+          }
+        }
+      } catch (err) {
+        console.warn("Aviso ao limpar rascunhos vazios:", err);
+      }
+
+      // 6. Clean old/redundant accessAlerts
+      let alertsDeletedCount = 0;
+      try {
+        const alertSnapshot = await getDocs(collection(db, "accessAlerts"));
+        for (const docItem of alertSnapshot.docs) {
+          const data = docItem.data() || {};
+          if (data.resolved || !data.timestamp) {
+            await deleteDoc(doc(db, "accessAlerts", docItem.id));
+            alertsDeletedCount++;
+          }
+        }
+      } catch (err) {
+        console.warn("Aviso ao limpar alertas antigos:", err);
+      }
+
+      // 7. Clean browser cache (localStorage)
+      let cacheCleared = false;
+      try {
+        Object.keys(localStorage).forEach((key) => {
+          if (
+            key.startsWith("sigep_") ||
+            key.startsWith("teto_") ||
+            key.startsWith("mono_") ||
+            key.includes("cache") ||
+            key.includes("draft")
+          ) {
+            localStorage.removeItem(key);
+          }
+        });
+        cacheCleared = true;
+      } catch (e) {
+        console.warn("Aviso ao limpar cache local:", e);
+      }
+
       console.log("Limpeza Geral do Sistema concluída com sucesso!");
       return {
         success: true,
@@ -1320,6 +1370,9 @@ export const firestoreService = {
         matrixRemoved: matrixResult.deletedCount || 0,
         activitiesDeleted: actDeletedCount,
         suppliersDeleted: supDeletedCount,
+        draftsDeleted: draftsDeletedCount,
+        alertsDeleted: alertsDeletedCount,
+        cacheCleared,
       };
     } catch (error) {
       console.error("Erro na limpeza geral do sistema:", error);

@@ -293,7 +293,17 @@ export const ViewRenderer: React.FC<ViewRendererProps> = ({
           );
         }
       }
-      return <MainMenu user={extendedUser} onNavigate={openSubMenu} onShowAlert={onShowAlert} onBack={goBack} onLogout={onLogout} />;
+      return (
+        <MainMenu
+          user={extendedUser}
+          onNavigate={openSubMenu}
+          onShowAlert={onShowAlert}
+          onBack={goBack}
+          onLogout={onLogout}
+          matrixActivities={matrixActivities}
+          onTetoOrcamental={() => onSetView?.("acao_orcamental")}
+        />
+      );
 
     case "submenu":
       return currentSubMenu ? (

@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   TrendingUp,
   FileCheck,
+  DollarSign,
 } from "lucide-react";
 import { normalize as n, isMatch, toTitleCase as tc } from "../../lib/utils";
 import { isBossUser, isSuperBossUser, getRoles } from "../../lib/auth";
@@ -27,6 +28,8 @@ export default function MainMenu({
   onBack,
   onLogout,
   onGestaoDocumentos,
+  matrixActivities,
+  onTetoOrcamental,
 }: {
   user?: any;
   onNavigate: (
@@ -41,11 +44,51 @@ export default function MainMenu({
   onBack: () => void;
   onLogout: () => void;
   onGestaoDocumentos?: () => void;
+  matrixActivities?: any[];
+  onTetoOrcamental?: () => void;
 }) {
   const [pendingCount, setPendingCount] = useState(0);
   const [requisicoes, setRequisicoes] = useState<any[]>([]);
   const [expedientes, setExpedientes] = useState<any[]>([]);
   const [resetRequests, setResetRequests] = useState<any[]>([]);
+
+  const isBudgetExpired = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const limitDate = new Date(currentYear, 11, 20, 23, 59, 59); // 11 é Dezembro
+    return now > limitDate;
+  }, []);
+
+  const totalBudgetAmount = useMemo(() => {
+    if (isBudgetExpired) return 0;
+    return (matrixActivities || []).reduce((sum, act) => {
+      let actVal = 0;
+      let hasRub = false;
+      if (Array.isArray(act.rubricas) && act.rubricas.length > 0) {
+        const rSum = act.rubricas.reduce(
+          (acc: number, r: any) => acc + Number(r.valorTotal || r.total || r.valor || r.precoTotal || 0),
+          0
+        );
+        if (rSum > 0) {
+          actVal += rSum;
+          hasRub = true;
+        }
+      }
+      if (!hasRub) {
+        actVal += Number(act.valorTotal || act.valor || act.orcamentoTotal || act.valorTotal || 0);
+      }
+      return sum + actVal;
+    }, 0);
+  }, [matrixActivities, isBudgetExpired]);
+
+  const formattedBudget = useMemo(() => {
+    return (
+      totalBudgetAmount.toLocaleString("pt-MZ", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }) + " MZN"
+    );
+  }, [totalBudgetAmount]);
 
   useEffect(() => {
     if (!user) return;
@@ -128,9 +171,41 @@ export default function MainMenu({
           >
             Menu Principal
           </h2>
-          <p className="text-sm sm:text-base lg:text-lg text-gray-500 font-medium font-serif italic">
+          <p className="text-sm sm:text-base lg:text-lg text-gray-500 font-medium font-serif italic mb-4">
             Selecione o bloco do sistema a que deseja aceder
           </p>
+
+          {formattedBudget && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={() => {
+                if (onTetoOrcamental) {
+                  onTetoOrcamental();
+                } else {
+                  onShowAlert(`Teto Orçamental da Instituição: ${formattedBudget}`);
+                }
+              }}
+              className="mt-2 w-full max-w-md mx-auto flex items-center justify-center gap-3 bg-[#b91c1c] text-white px-6 py-3 rounded-2xl font-black tracking-wider hover:bg-red-800 active:scale-95 touch-manipulation transition-all shadow-xl border border-red-600/30 cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                <DollarSign size={20} className="text-white" />
+              </div>
+              <div className="text-left leading-tight w-full">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] uppercase tracking-widest font-black text-white/90">
+                    TETO INSTITUIÇÃO
+                  </span>
+                  <span className={`text-[8px] uppercase tracking-widest px-2 py-0.5 rounded-full font-black ${isBudgetExpired ? "bg-amber-400 text-slate-950 animate-pulse" : "bg-emerald-500 text-white"}`}>
+                    {isBudgetExpired ? "Expirado" : `Válido até 20/12/${new Date().getFullYear()}`}
+                  </span>
+                </div>
+                <span className="text-lg sm:text-xl font-extrabold text-white block mt-0.5">
+                  {formattedBudget}
+                </span>
+              </div>
+            </motion.button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-[90%] mx-auto py-2 sm:py-6">
