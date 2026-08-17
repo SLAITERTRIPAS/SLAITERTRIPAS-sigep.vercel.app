@@ -1511,10 +1511,25 @@ export default function AcaoOrcamentalView({
   // Soma dos valores totais de planificação de todos os departamentos desta direção
   const totalPlanificacaoDepartamentosDirecao = useMemo(() => {
     const targetDirectionName = selectedLevel === "direcao" ? selectedUnit : title;
+    const targetNorm = normalizeStr(targetDirectionName);
     
     const directionActivities = activities.filter((act) => {
       const actDir = act.direcao || act.direccao || act.unidadeOrganica;
-      return matchesUnitStr(actDir, targetDirectionName);
+      if (matchesUnitStr(actDir, targetDirectionName)) return true;
+
+      // Se a direção direta não bate, verifica se o departamento pertence a esta direção
+      const actDep = act.departamento || act.unidade || act.solicitante || "";
+      if (actDep) {
+        // Encontrar a direção que contém este departamento
+        for (const [dirName, deps] of Object.entries(DEPARTAMENTOS)) {
+          if (deps.some(d => normalizeStr(d).includes(normalizeStr(actDep)) || normalizeStr(actDep).includes(normalizeStr(d)))) {
+            if (normalizeStr(dirName).includes(targetNorm) || targetNorm.includes(normalizeStr(dirName))) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
     });
 
     return directionActivities.reduce((sum, act) => {

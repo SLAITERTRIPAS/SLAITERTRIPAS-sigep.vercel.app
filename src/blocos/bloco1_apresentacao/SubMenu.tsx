@@ -17,6 +17,7 @@ import ArchiveView from "../bloco5_sistema/ArchiveView";
 
 import { LibraryRegistration, BookRegistration } from "../../types";
 import { isSuperBossUser, isPatrimonioBossOrAdmin, isDPEPUser, isChefeDPEPUser } from "../../lib/auth";
+import { DEPARTAMENTOS } from "../../constants/formOptions";
 import MainHeader from "../bloco1_apresentacao/MainHeader";
 
 const getSubBlockLabel = (parentTitle: string, itemTitle: string) => {
@@ -190,7 +191,23 @@ export default function SubMenu({
       ];
       return matchDir.some(d => actDir.includes(d) || actDep.includes(d) || actRep.includes(d) || actSet.includes(d));
     }
-    return actDir.includes(normOrgan) || actDep.includes(normOrgan) || actRep.includes(normOrgan) || actSet.includes(normOrgan);
+    if (actDir.includes(normOrgan) || actDep.includes(normOrgan) || actRep.includes(normOrgan) || actSet.includes(normOrgan)) {
+      return true;
+    }
+
+    // Caso especial: Verificar se o departamento da atividade pertence à Direção (OrganTitle)
+    if (actDep) {
+      for (const [dirName, deps] of Object.entries(DEPARTAMENTOS)) {
+        const normDir = normalizeStr(dirName);
+        if (normDir.includes(normOrgan) || normOrgan.includes(normDir)) {
+          if (deps.some(d => normalizeStr(d).includes(actDep) || actDep.includes(normalizeStr(d)))) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
   };
 
   const totalBudgetAmount = matrixActivities.reduce((sum, act) => {
