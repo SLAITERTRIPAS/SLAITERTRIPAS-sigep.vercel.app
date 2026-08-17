@@ -889,6 +889,11 @@ export async function syncAllLocalData() {
     "tetos_orcamentais",
     "produtos_unificados",
     "balanco_config",
+    "drafts",
+    "password_reset_requests",
+    "notification_read_status",
+    "afetacao_checklist",
+    "messages"
   ];
 
   console.log("🔄 Iniciando sincronização de dados locais com o Firestore...");

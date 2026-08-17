@@ -164,6 +164,7 @@ export default function App() {
 
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const APP_VERSION = "1.0.2"; // Incrementar para forçar sincronização de novos dados
 
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
@@ -423,15 +424,8 @@ export default function App() {
 
     const seedData = async () => {
       try {
-        // Limpeza de todos os dados de teste se ainda não tiver ocorrido, mantendo colaboradores e utilizadores
-        if (localStorage.getItem("sigep_test_data_cleaned_v2") !== "true") {
-          localStorage.setItem("sigep_test_data_cleaned_v2", "true");
-          databaseMaintenance.fullSystemReset().then((res) => {
-            console.log("Base de dados limpa com sucesso. Total removido:", res.totalRemoved);
-          }).catch((cleanErr) => {
-            console.warn("Aviso na limpeza automática de dados de teste:", cleanErr);
-          });
-        }
+        // A limpeza automática foi desativada para evitar perda acidental de dados em produção.
+        // O Administrador pode realizar limpezas manuais se necessário através do menu de manutenção.
 
         const usersRef = collection(db, "users");
 
@@ -521,17 +515,46 @@ export default function App() {
     seedData();
   }, [authReady]);
 
-  // Sincronização automática de dados locais pendentes ao iniciar o sistema
+  // Sincronização automática de dados locais pendentes e dados do sistema ao iniciar/atualizar
   useEffect(() => {
     if (authReady) {
-      const syncTimer = setTimeout(() => {
-        firestoreService.syncAllLocalData().catch((err) => {
-          console.warn("Erro na sincronização automática inicial:", err);
-        });
-      }, 5000); // Aguarda 5 segundos para não sobrecarregar o boot inicial
+      const runSystemSync = async () => {
+        try {
+          const lastVersion = localStorage.getItem("sigep_app_version");
+          const isNewVersion = lastVersion !== APP_VERSION;
+
+          // 1. Sincronizar dados locais (localStorage -> Firestore)
+          await firestoreService.syncAllLocalData();
+
+          // 2. Se for uma nova versão ou o proprietário, garantir dados críticos
+          if (isNewVersion || (user?.email === "slaitertripas@gmail.com")) {
+            console.log(`🚀 [SIGEP] Nova versão detectada (${APP_VERSION}). Sincronizando dados mestre...`);
+            
+            // Sincronizar Efetivo Geral se for Admin ou versão nova (limitado para evitar quotas)
+            if (isSuperBossUser(user) || user?.email === "slaitertripas@gmail.com") {
+              await firestoreService.seedAllCollaborators(EFETIVO_GERAL_DATA);
+              
+              // Sincronizar atividades mestre (se houver)
+              if (firestoreService.matrixActivities) {
+                 // Aqui poderíamos adicionar sementes específicas se necessário
+              }
+            }
+
+            localStorage.setItem("sigep_app_version", APP_VERSION);
+            
+            if (isNewVersion) {
+              console.log("✅ [SIGEP] Sincronização de atualização concluída com sucesso.");
+            }
+          }
+        } catch (err) {
+          console.warn("Erro na sincronização automática do sistema:", err);
+        }
+      };
+
+      const syncTimer = setTimeout(runSystemSync, 3000); 
       return () => clearTimeout(syncTimer);
     }
-  }, [authReady]);
+  }, [authReady, user?.email]);
 
   useEffect(() => {
     if (user && user.id && user.email) {

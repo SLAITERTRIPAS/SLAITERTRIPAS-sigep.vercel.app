@@ -8,7 +8,42 @@ import {
   initializeFirestore,
   terminate,
 } from "firebase/firestore";
-import firebaseConfig from "../../firebase-applet-config.json";
+import firebaseConfigFile from "../../firebase-applet-config.json";
+
+// Configuração flexível: suporta firebase-applet-config.json embutido e variáveis de ambiente (ex: Vercel)
+const metaEnv = typeof import.meta !== "undefined" ? (import.meta as any).env || {} : {};
+
+const firebaseConfig = {
+  projectId:
+    metaEnv.VITE_FIREBASE_PROJECT_ID ||
+    firebaseConfigFile.projectId ||
+    "gen-lang-client-0579598070",
+  appId:
+    metaEnv.VITE_FIREBASE_APP_ID ||
+    firebaseConfigFile.appId,
+  apiKey:
+    metaEnv.VITE_FIREBASE_API_KEY ||
+    firebaseConfigFile.apiKey,
+  authDomain:
+    metaEnv.VITE_FIREBASE_AUTH_DOMAIN ||
+    firebaseConfigFile.authDomain,
+  firestoreDatabaseId:
+    metaEnv.VITE_FIREBASE_FIRESTORE_DATABASE_ID ||
+    firebaseConfigFile.firestoreDatabaseId ||
+    "ai-studio-sigepisps010fina-b441aacc-3bfd-4da7-9bfa-87a71ae70cd9",
+  storageBucket:
+    metaEnv.VITE_FIREBASE_STORAGE_BUCKET ||
+    firebaseConfigFile.storageBucket,
+  messagingSenderId:
+    metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID ||
+    firebaseConfigFile.messagingSenderId,
+  measurementId:
+    metaEnv.VITE_FIREBASE_MEASUREMENT_ID ||
+    firebaseConfigFile.measurementId,
+  oAuthClientId:
+    metaEnv.VITE_FIREBASE_OAUTH_CLIENT_ID ||
+    firebaseConfigFile.oAuthClientId,
+};
 
 const apps = getApps();
 const app = apps.length === 0 ? initializeApp(firebaseConfig) : apps[0];

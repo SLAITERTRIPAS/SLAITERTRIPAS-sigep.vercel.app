@@ -698,11 +698,11 @@ export default function ActivityForm({
   // Use Firestore colaboradores if available, fallback to FUNCIONARIOS
   const formatLabel = (c: any) => {
     if (!c) return "Responsável";
-    const orgao = c.unidade || "ISPS";
+    const orgao = c.unidade || c.orgao || "ISPS";
     const dir = c.direcao || "---";
     const dep = c.departamento || "---";
-    const rep = c.reparticao || "---";
-    return `${c.nome || "Colaborador"} [${orgao} > ${dir} > ${dep}]`;
+    const rep = c.reparticao || c.setor || "---";
+    return `${c.nome || "Colaborador"} [Órgão: ${orgao} Direção: ${dir} Departamento: ${dep} Repartição: ${rep}]`;
   };
 
   const getUniqueOptions = (list: any[]) => {
@@ -5829,19 +5829,20 @@ export default function ActivityForm({
                                     onChange={(e) => {
                                       const selectedProdName = e.target.value;
                                       
-                                      if (selectedProdName === "__custom__") {
-                                        const newRubricas = [...formData.rubricas];
-                                        newRubricas[index] = {
-                                          ...rubrica,
-                                          nomeProduto: "__manual__", 
-                                          precoUnitario: 0,
-                                          detalhes: "Unidade",
-                                          especificacao: "",
-                                          valorTotal: 0,
-                                        };
-                                        setFormData({ ...formData, rubricas: newRubricas });
-                                        return;
-                                      }
+                                if (selectedProdName === "__custom__") {
+                                  const newRubricas = [...formData.rubricas];
+                                  newRubricas[index] = {
+                                    ...rubrica,
+                                    nomeProduto: "", 
+                                    isManual: true,
+                                    precoUnitario: 0,
+                                    detalhes: "Unidade",
+                                    especificacao: "",
+                                    valorTotal: 0,
+                                  };
+                                  setFormData({ ...formData, rubricas: newRubricas });
+                                  return;
+                                }
 
                                       if (!selectedProdName) {
                                         const newRubricas = [...formData.rubricas];
@@ -5868,6 +5869,7 @@ export default function ActivityForm({
                                         newRubricas[index] = {
                                           ...rubrica,
                                           nomeProduto: found.nome,
+                                          isManual: false,
                                           precoUnitario: prc,
                                           detalhes: found.unidade || rubrica.detalhes || "Unidade",
                                           especificacao: found.especificacao || rubrica.especificacao || "",
@@ -5898,19 +5900,20 @@ export default function ActivityForm({
                                     </optgroup>
                                   </select>
 
-                                  {rubrica.nomeProduto === "__manual__" && (
+                                  {(rubrica.isManual) && (
                                     <div className="animate-in fade-in slide-in-from-top-1 duration-200">
                                       <input
                                         type="text"
                                         placeholder="Digite o nome do novo produto..."
                                         autoFocus
+                                        value={rubrica.nomeProduto || ""}
                                         onChange={(e) => {
                                           const newRubricas = [...formData.rubricas];
-                                          newRubricas[index] = { ...rubrica, nomeProduto: e.target.value };
+                                          newRubricas[index] = { ...rubrica, nomeProduto: e.target.value, isManual: true };
                                           setFormData({ ...formData, rubricas: newRubricas });
                                         }}
                                         onBlur={() => {
-                                          if (rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && rubrica.nomeProduto.length > 2 && !products.some(p => p.nome === rubrica.nomeProduto)) {
+                                          if (rubrica.nomeProduto && rubrica.nomeProduto.length > 2 && !products.some(p => p.nome === rubrica.nomeProduto)) {
                                             collectProductFromRubric(rubrica);
                                           }
                                         }}
@@ -5999,9 +6002,9 @@ export default function ActivityForm({
                                   </label>
                                   <input
                                     type="text"
-                                    value={rubrica.nomeProduto === "__manual__" ? "" : (rubrica.nomeProduto || "")}
+                                    value={rubrica.nomeProduto || ""}
                                     disabled={isBlocked}
-                                    readOnly={!!rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && products.some(p => p.nome === rubrica.nomeProduto)}
+                                    readOnly={!!rubrica.nomeProduto && !rubrica.isManual && products.some(p => p.nome === rubrica.nomeProduto)}
                                     placeholder="Nome do novo produto..."
                                     onChange={(e) => {
                                       const newRubricas = [...formData.rubricas];
@@ -6009,11 +6012,11 @@ export default function ActivityForm({
                                       setFormData({ ...formData, rubricas: newRubricas });
                                     }}
                                     onBlur={() => {
-                                      if (rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && rubrica.nomeProduto.length > 2 && !products.some(p => p.nome === rubrica.nomeProduto)) {
+                                      if (rubrica.nomeProduto && rubrica.nomeProduto.length > 2 && !products.some(p => p.nome === rubrica.nomeProduto)) {
                                         collectProductFromRubric(rubrica);
                                       }
                                     }}
-                                    className={`w-full px-4 py-3 border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 shadow-sm ${!!rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && products.some(p => p.nome === rubrica.nomeProduto) ? "bg-gray-50" : "bg-white"}`}
+                                    className={`w-full px-4 py-3 border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 shadow-sm ${!!rubrica.nomeProduto && !rubrica.isManual && products.some(p => p.nome === rubrica.nomeProduto) ? "bg-gray-50" : "bg-white"}`}
                                   />
                                 </div>
                                 <div className="space-y-1.5">
@@ -6101,7 +6104,9 @@ export default function ActivityForm({
                                   necessidade: rubrica.necessidade,
                                   quantidade: 1,
                                   precoUnitario: 0,
-                                  valorTotal: 0
+                                  valorTotal: 0,
+                                  nomeProduto: "",
+                                  isManual: false
                                 });
                                 setFormData({ ...formData, rubricas: newRubricas });
                               }}
@@ -6137,7 +6142,8 @@ export default function ActivityForm({
                                         const newRubricas = [...formData.rubricas];
                                         newRubricas[index] = {
                                           ...rubrica,
-                                          nomeProduto: "__manual__",
+                                          nomeProduto: "", 
+                                          isManual: true,
                                           precoUnitario: 0,
                                           detalhes: "Unidade",
                                           especificacao: "",
@@ -6169,6 +6175,7 @@ export default function ActivityForm({
                                         newRubricas[index] = {
                                           ...rubrica,
                                           nomeProduto: found.nome,
+                                          isManual: false,
                                           precoUnitario: prc,
                                           detalhes: found.unidade || rubrica.detalhes || "Unidade",
                                           especificacao: found.especificacao || rubrica.especificacao || "",
@@ -6199,19 +6206,20 @@ export default function ActivityForm({
                                     </optgroup>
                                   </select>
 
-                                  {rubrica.nomeProduto === "__manual__" && (
+                                  {(rubrica.isManual) && (
                                     <div className="animate-in fade-in slide-in-from-top-1 duration-200">
                                       <input
                                         type="text"
                                         placeholder="Digite o nome do novo produto..."
                                         autoFocus
+                                        value={rubrica.nomeProduto || ""}
                                         onChange={(e) => {
                                           const newRubricas = [...formData.rubricas];
-                                          newRubricas[index] = { ...rubrica, nomeProduto: e.target.value };
+                                          newRubricas[index] = { ...rubrica, nomeProduto: e.target.value, isManual: true };
                                           setFormData({ ...formData, rubricas: newRubricas });
                                         }}
                                         onBlur={() => {
-                                          if (rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && rubrica.nomeProduto.length > 2 && !products.some(p => p.nome === rubrica.nomeProduto)) {
+                                          if (rubrica.nomeProduto && rubrica.nomeProduto.length > 2 && !products.some(p => p.nome === rubrica.nomeProduto)) {
                                             collectProductFromRubric(rubrica);
                                           }
                                         }}
@@ -6257,7 +6265,7 @@ export default function ActivityForm({
                                   type="number"
                                   value={rubrica.precoUnitario || ""}
                                   disabled={isBlocked}
-                                  readOnly={!!rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && products.some(p => p.nome === rubrica.nomeProduto)}
+                                  readOnly={!!rubrica.nomeProduto && !rubrica.isManual && products.some(p => p.nome === rubrica.nomeProduto)}
                                   onChange={(e) => {
                                     const newRubricas = [...formData.rubricas];
                                     const prc = Number(e.target.value);
@@ -6269,11 +6277,11 @@ export default function ActivityForm({
                                     setFormData({ ...formData, rubricas: newRubricas });
                                   }}
                                   onBlur={() => {
-                                    if (rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && !products.some(p => p.nome === rubrica.nomeProduto)) {
+                                    if (rubrica.nomeProduto && !rubrica.isManual && !products.some(p => p.nome === rubrica.nomeProduto)) {
                                       collectProductFromRubric(rubrica);
                                     }
                                   }}
-                                  className={`w-full px-4 py-3 border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 shadow-sm ${!!rubrica.nomeProduto && rubrica.nomeProduto !== "__manual__" && products.some(p => p.nome === rubrica.nomeProduto) ? "bg-gray-50" : "bg-white"}`}
+                                  className={`w-full px-4 py-3 border border-blue-900/15 rounded-2xl text-[13px] font-bold text-slate-800 outline-none focus:border-blue-900 shadow-sm ${!!rubrica.nomeProduto && !rubrica.isManual && products.some(p => p.nome === rubrica.nomeProduto) ? "bg-gray-50" : "bg-white"}`}
                                 />
                                 {!products.some(p => p.nome === rubrica.nomeProduto) && rubrica.nomeProduto && (
                                   <button

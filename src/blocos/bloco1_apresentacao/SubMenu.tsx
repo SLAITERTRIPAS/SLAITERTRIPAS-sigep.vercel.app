@@ -191,6 +191,14 @@ export default function SubMenu({
       ];
       return matchDir.some(d => actDir.includes(d) || actDep.includes(d) || actRep.includes(d) || actSet.includes(d));
     }
+    if (normOrgan === "DICOSAFA" || normOrgan === "DICOSSAFA" || normOrgan.includes("COORDENACAO DE SERVICOS ADMINISTRATIVOS E FINANCAS")) {
+      const matchDepts = [
+        "RECURSOS HUMANOS", "FINANCAS", "PATRIMONIO", "SECRETARIA GERAL", 
+        "TIC", "LAR DE ESTUDANTES", "PRODUCAO ALIMENTAR", "DICOSAFA", "DICOSSAFA"
+      ];
+      return matchDepts.some(d => actDir.includes(d) || actDep.includes(d) || actRep.includes(d) || actSet.includes(d));
+    }
+
     if (actDir.includes(normOrgan) || actDep.includes(normOrgan) || actRep.includes(normOrgan) || actSet.includes(normOrgan)) {
       return true;
     }

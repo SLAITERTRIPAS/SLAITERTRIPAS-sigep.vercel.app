@@ -548,12 +548,24 @@ export default function PlanoWorkflowView({
       return Number(a.ano) === Number(selectedYear);
     });
 
-    if (yearFiltered.length === 0 && rawActivities.length > 0) {
-      yearFiltered = rawActivities;
-    }
-
+    // Se o utilizador está a ver um ano vazio, mas existem dados em outros anos,
+    // não fazemos fallback automático aqui para não confundir, mas informamos na UI.
     return getAuthorizedActivities(yearFiltered, user);
   }, [rawActivities, selectedYear, user]);
+
+  const hasActivitiesInOtherYears = useMemo(() => {
+    if (!rawActivities) return false;
+    return rawActivities.some(a => a.ano && Number(a.ano) !== Number(selectedYear));
+  }, [rawActivities, selectedYear]);
+
+  const availableYears = useMemo(() => {
+    if (!rawActivities) return [2026, 2027];
+    const years = new Set<number>([2026, 2027]);
+    rawActivities.forEach(a => {
+      if (a.ano) years.add(Number(a.ano));
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [rawActivities]);
 
   const filteredActivities = useMemo(() => {
     let authorized = [...authorizedActivities];
@@ -1487,18 +1499,23 @@ export default function PlanoWorkflowView({
     return allDirections.map((dirName) => {
       const depts = DEPARTAMENTOS[dirName as keyof typeof DEPARTAMENTOS] || [];
       const deptBreakdown = depts.map((deptName) => {
-        const deptActs = yearActs.filter(
-          (a) =>
-            (a.departamento || "").toLowerCase() === deptName.toLowerCase() ||
-            (a.departamento || "")
-              .toUpperCase()
-              .includes(deptName.toUpperCase()) ||
-            deptName
-              .toUpperCase()
-              .includes((a.departamento || "").toUpperCase()) ||
-            ((a.direcao || "").toLowerCase().includes(dirName.toLowerCase()) &&
-              (!a.departamento || a.departamento === deptName)),
-        );
+        const deptActs = yearActs.filter((a) => {
+          const aDept = (a.departamento || "").toLowerCase();
+          const aDir = (a.direcao || "").toLowerCase();
+          const dName = dirName.toLowerCase();
+          const isDicosafaVariant = (dName === "dicosafa" || dName === "dicossafa");
+          
+          const matchDept = 
+            aDept === deptName.toLowerCase() ||
+            aDept.includes(deptName.toLowerCase()) ||
+            deptName.toLowerCase().includes(aDept);
+            
+          const matchDirContext = 
+            isDicosafaVariant ? (aDir.includes("dicosafa") || aDir.includes("dicossafa")) : aDir.includes(dName);
+
+          return matchDept || (matchDirContext && (!a.departamento || a.departamento === deptName));
+        });
+        
         const nonSalaryActs = deptActs.filter((a) => !isSalaryActivity(a));
         const deptBudget = nonSalaryActs.reduce(
           (acc, act) => acc + getActivityTotal(act),
@@ -1513,9 +1530,13 @@ export default function PlanoWorkflowView({
 
       const dirDirectActs = yearActs.filter((a) => {
         const aDir = (a.direcao || "").toUpperCase();
-        const matchDir =
-          aDir.includes(dirName.toUpperCase()) ||
-          dirName.toUpperCase().includes(aDir);
+        const dName = dirName.toUpperCase();
+        const isDicosafaVariant = (dName === "DICOSAFA" || dName === "DICOSSAFA");
+        
+        const matchDir = isDicosafaVariant 
+          ? (aDir.includes("DICOSAFA") || aDir.includes("DICOSSAFA"))
+          : (aDir.includes(dName) || dName.includes(aDir));
+          
         const isAlreadyInDept = depts.some(
           (d) =>
             (a.departamento || "").toUpperCase().includes(d.toUpperCase()) ||
@@ -5221,6 +5242,25 @@ export default function PlanoWorkflowView({
                         Ainda não existem atividades planificadas por si para o
                         exercício de {selectedYear}.
                       </p>
+
+                      {hasActivitiesInOtherYears && (
+                        <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col items-center gap-2">
+                          <p className="text-amber-800 text-xs font-bold">
+                            ⚠️ Detetamos atividades em outros anos/exercícios.
+                          </p>
+                          <div className="flex gap-2 flex-wrap justify-center">
+                            {availableYears.filter(y => y !== selectedYear).map(y => (
+                              <button
+                                key={y}
+                                onClick={() => setSelectedYear(y)}
+                                className="bg-white border border-amber-300 text-amber-700 px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-amber-100 transition-colors"
+                              >
+                                Ver {y}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {!isReadOnly && (
                         <button
                           onClick={() => setShowAddForm(true)}
@@ -5297,6 +5337,25 @@ export default function PlanoWorkflowView({
                       </div>
                       <h3 className="text-lg font-bold text-slate-900 mb-2">Plano de Atividades Limpo</h3>
                       <p className="text-slate-500 mb-6">Ainda não foram planeadas atividades para este departamento/ano.</p>
+                      
+                      {hasActivitiesInOtherYears && (
+                        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-2xl flex flex-col items-center gap-2 max-w-sm mx-auto">
+                          <p className="text-blue-800 text-xs font-bold">
+                            Existem atividades registadas em outros anos.
+                          </p>
+                          <div className="flex gap-2 flex-wrap justify-center">
+                            {availableYears.filter(y => y !== selectedYear).map(y => (
+                              <button
+                                key={y}
+                                onClick={() => setSelectedYear(y)}
+                                className="bg-white border border-blue-300 text-blue-700 px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-blue-100 transition-colors"
+                              >
+                                Mudar para {y}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <button 
                         onClick={() => setShowAddForm(true)}
                         className="bg-slate-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-slate-800"
