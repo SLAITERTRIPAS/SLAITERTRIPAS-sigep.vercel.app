@@ -166,7 +166,10 @@ export const baseMenuItems = [
             title: "Departamento de Recursos Humanos",
             subItems: [
               { title: "Chefe do RH" },
-              { title: "Repartição de Pessoal" },
+              {
+                title: "Repartição de Pessoal",
+                subItems: [{ title: "Gestão de Pessoal" }],
+              },
               { title: "Repartição de Formação" },
               { title: "Repartição de Apoio Social" },
             ],

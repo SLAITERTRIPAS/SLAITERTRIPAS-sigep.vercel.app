@@ -186,6 +186,16 @@ export default function App() {
   useEffect(() => {
     if (!user || !user.id || user.isAnonymous) return;
 
+    // Isenção para Administrador Soberano / Programador (permite testar em múltiplas abas/dispositivos sem desconexão forçada)
+    if (
+      isSuperBossUser(user) ||
+      user.email === "slaitertripas@gmail.com" ||
+      user.isProgrammer === true ||
+      user.isOwner === true
+    ) {
+      return;
+    }
+
     let localSessionId = localStorage.getItem("sigep_active_session_id");
     if (!localSessionId) {
       localSessionId = "sess_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
@@ -431,46 +441,53 @@ export default function App() {
 
         // 1. Admin/Proprietário account (Slaiter Tripas)
         const adminData = {
+          id: "ST84954777",
+          docId: "ST84954777",
           nome: "SLAITER TRIPAS",
           name: "SLAITER TRIPAS",
           email: "slaitertripas@gmail.com",
           usuario: "slaitertripas@gmail.com",
+          telefone: "84954777",
+          celular: "84954777",
+          nuit: "108164611",
+          numeroBI: "110101798743F",
           cargo: "Programador e Proprietário do Sistema",
+          cargoChefia: "Proprietário do sistema",
+          categoria: "Proprietário e Programador do Sistema",
+          carreira: "Técnico Superior N1",
+          tipoContrato: "Tempo inteiro",
+          vinculoContractual: "Quadro",
+          tipo: "CTA",
           role: "Administrador do Sistema (Acesso Soberano)",
           tipoUsuario: "Administrador do Sistema",
           status: "Afetado",
+          areaDeAfetacao: "Gabinete do Diretor-Geral",
           unidade: "DPEP",
+          direcao: "Gabinete do Diretor-Geral",
+          departamento: "Gabinete do Diretor-Geral",
+          reparticao: "Gabinete do Diretor-Geral",
+          setor: "Gabinete do Diretor-Geral",
           efetivo: true,
           isOwner: true,
+          isAdmin: true,
+          isChefia: true,
+          isProgrammer: true,
           mustChangePassword: false,
           isFirstAccess: false,
-          password: "231383",
+          password: "ethan23",
         };
 
-        const qAdmin = query(
-          usersRef,
-          where("email", "==", "slaitertripas@gmail.com"),
-        );
-        const snapAdmin = await getDocs(qAdmin);
-
-        if (snapAdmin.empty) {
-          console.log(
-            "Semeando Administrador Slaiter Tripas no Firestore...",
-          );
-          const docId = "ST108164611";
-          await setDoc(
-            doc(db, "users", docId),
-            { ...adminData, id: docId, createdAt: serverTimestamp() },
-            { merge: true },
-          );
-        } else {
-          // Garantir que os dados do proprietário estão sempre atualizados e com acesso total
-          const adminDoc = snapAdmin.docs[0];
-          await updateDoc(adminDoc.ref, {
+        const docId = "ST84954777";
+        // Garantir criação e atualização estrita do documento do proprietário com ID único no Firestore
+        await setDoc(
+          doc(db, "users", docId),
+          {
             ...adminData,
-            updatedAt: serverTimestamp()
-          });
-        }
+            id: docId,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
 
         // 2. Sincronização de utilizadores especiais removida para permitir persistência de senhas personalizadas.
         
@@ -505,6 +522,11 @@ export default function App() {
             }
           }
         }
+
+        // Executar sincronização dos campos de usuário (Iniciais + NUIT) e senha padrão (1234)
+        firestoreService.syncAllUserHandles().catch((err) => {
+          console.warn("Aviso na sincronização de usuários:", err);
+        });
 
         // Sincronização inicial concluída com sucesso
       } catch (err) {
@@ -905,7 +927,11 @@ export default function App() {
     }
   }, [efetivoEscolar]);
 
-  const handleLogin = async (userData: any) => {
+  const handleFinishSplash = useCallback(() => {
+    setShowSplash(false);
+  }, []);
+
+  const handleLogin = (userData: any) => {
     const sessionToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     setUser(userData);
 
@@ -923,21 +949,19 @@ export default function App() {
       (loginCount + 1).toString(),
     );
 
-    // Track session start time in Firestore if possible
-    try {
-      if (userData.id) {
-        await firestoreService.users.update(userData.id, {
-          lastLoginAt: new Date().toISOString(),
-          lastSeenAt: new Date().toISOString(),
-          isOnline: true,
-          currentSessionToken: sessionToken,
-        });
+    // Track session start time in Firestore if possible (non-blocking)
+    if (userData.id) {
+      firestoreService.users.update(userData.id, {
+        lastLoginAt: new Date().toISOString(),
+        lastSeenAt: new Date().toISOString(),
+        isOnline: true,
+        currentSessionToken: sessionToken,
+      }).catch((e: any) => {
+        console.warn("Aviso ao rastrear login:", e?.message || String(e));
+      });
 
-        // Also store locally for duration calculation
-        sessionStorage.setItem("session_start", new Date().toISOString());
-      }
-    } catch (e: any) {
-      console.error("Error tracking login:", e?.message || String(e));
+      // Also store locally for duration calculation
+      sessionStorage.setItem("session_start", new Date().toISOString());
     }
 
     setShowSplash(true);
@@ -1516,9 +1540,9 @@ export default function App() {
               {showSplash && (
                 <div className="fixed inset-0 z-[10000]">
                   <SplashScreen
-                    user={extendedUser}
+                    user={extendedUser || user}
                     isFirstLogin={isFirstLogin}
-                    onFinish={() => setShowSplash(false)}
+                    onFinish={handleFinishSplash}
                   />
                 </div>
               )}

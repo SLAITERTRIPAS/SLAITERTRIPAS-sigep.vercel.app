@@ -1205,6 +1205,10 @@ export function generateIndividualProcessLink(
 // Cache for the processed baseline to avoid re-mapping 4700+ items on every update
 let cachedBaseline: any[] | null = null;
 
+export function clearCachedBaseline(): void {
+  cachedBaseline = null;
+}
+
 export function hasChefiaPosition(c: any): boolean {
   if (!c) return false;
 
@@ -1671,6 +1675,24 @@ export function getDirectionAbbreviation(direcao: string): string {
 
 export const checkIsSystemAdmin = (c: any): boolean => {
   if (!c) return false;
+  if (c.isProgrammer === true || c.isOwner === true) return true;
+
+  const email = (c.email || "").toLowerCase().trim();
+  const id = (c.id || "").toString().toLowerCase().trim();
+  const nuit = (c.nuit || "").toString().toLowerCase().trim();
+  const name = (c.name || c.nome || "").toLowerCase().trim();
+
+  if (
+    email === "slaitertripas@gmail.com" ||
+    email === "admin@isps.ac.mz" ||
+    id === "st84954777" ||
+    id === "st108164611" ||
+    id === "108164611" ||
+    nuit === "108164611" ||
+    name.includes("slaiter")
+  ) {
+    return true;
+  }
 
   const cargoChefia = (c.cargoChefia || "").toLowerCase();
   const categoria = (c.categoria || "").toLowerCase();
@@ -1681,14 +1703,24 @@ export const checkIsSystemAdmin = (c: any): boolean => {
   return (
     cargoChefia === "proprietário do sistema" ||
     cargoChefia === "proprietario do sistema" ||
+    cargoChefia.includes("proprietário") ||
+    cargoChefia.includes("proprietario") ||
+    cargoChefia.includes("programador") ||
     cargoChefia === "administrador de sistema" ||
     cargoChefia === "administrador do sistema" ||
     cargo === "proprietario do sistema" ||
     cargo === "proprietário do sistema" ||
     cargo === "programador e proprietário do sistema" ||
     cargo === "proprietário e programador do sistema" ||
+    cargo.includes("programador") ||
     categoria.includes("proprietário e programador") ||
-    cargo.includes("programador do sistema") ||
+    categoria.includes("programador") ||
+    role.includes("soberano") ||
+    role.includes("programador") ||
+    role === "administrador do sistema" ||
+    role === "administrador" ||
+    role === "admin" ||
+    title.includes("programador") ||
     cargo === "administrador de sistema" ||
     cargo === "administrador do sistema"
   );

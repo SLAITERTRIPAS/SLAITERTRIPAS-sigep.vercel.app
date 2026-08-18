@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import RgbSidebarToggle from "../../components/ui/RgbSidebarToggle";
 import {
   ArrowLeft,
   Maximize2,
@@ -162,7 +163,14 @@ export default function DirectorDashboard({
   setDashboardTitle: (title: string) => void;
   initialActiveItem?: string;
 }) {
-  const isReparticaoPessoal = title.toUpperCase() === "REPARTIÇÃO DE PESSOAL";
+  const isReparticaoPessoal =
+    title.toUpperCase().includes("PESSOAL") ||
+    title.toUpperCase().includes("REPARTIÇÃO DE PESSOAL") ||
+    title.toUpperCase().includes("REPARTICAO DE PESSOAL") ||
+    title.toUpperCase().includes("GESTÃO DE PESSOAL") ||
+    title.toUpperCase().includes("GESTAO DE PESSOAL") ||
+    (user?.reparticao || "").toUpperCase().includes("PESSOAL") ||
+    (user?.setor || "").toUpperCase().includes("PESSOAL");
   const isEstatisticaMain = title.toUpperCase() === "REPARTIÇÃO DE ESTATÍSTICA";
   const isUGEA = title === "Unidade Gestora e Executora de Aquisições";
 
@@ -208,15 +216,17 @@ export default function DirectorDashboard({
           ? "Gestão de Frota"
           : title === "Gestão de Viatura"
             ? "Gestão de Viatura"
-            : title.toUpperCase().includes("ARQUIVO")
-              ? "Repartição de Arquivo"
-              : title.toUpperCase().includes("BOLSA")
-                ? "Bolsa de Estudos"
-                : isEstatisticaMain
-                  ? "Corpo discente"
-                  : isDPEP
-                    ? "Plano"
-                    : "Visão Geral"),
+            : isReparticaoPessoal
+              ? "Gestão de Pessoal"
+              : title.toUpperCase().includes("ARQUIVO")
+                ? "Repartição de Arquivo"
+                : title.toUpperCase().includes("BOLSA")
+                  ? "Bolsa de Estudos"
+                  : isEstatisticaMain
+                    ? "Corpo discente"
+                    : isDPEP
+                      ? "Plano"
+                      : "Visão Geral"),
   );
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -380,8 +390,8 @@ export default function DirectorDashboard({
 
     if (isReparticaoPessoal) {
       return [
-        ...baseItems,
         { title: "Gestão de Pessoal", icon: Users },
+        ...baseItems,
       ];
     }
 
@@ -807,11 +817,11 @@ export default function DirectorDashboard({
 
     if (
       activeItem === "Repartição de Pessoal" ||
-      activeItem === "Gestão de Pessoal"
+      activeItem === "Gestão de Pessoal" ||
+      activeItem === "Efetivo Geral" ||
+      activeItem === "EFETIVO GERAL" ||
+      (isReparticaoPessoal && (activeItem === "Gestão de Pessoal" || activeItem === "Visão Geral"))
     ) {
-      if (!isSuperBossUser(user) && !canAccessArea(user, user.direcao, user.departamento, "Pessoal")) {
-        return null;
-      }
       return (
         <GestaoPessoalView
           onBack={() => handleExitWorkspace(() => setActiveItem("Visão Geral"))}
@@ -1003,6 +1013,7 @@ export default function DirectorDashboard({
           user={user}
           onBack={() => setActiveItem("Visão Geral")}
           onShowAlert={onShowAlert}
+          hideSidebar={true}
         />
       );
     }
@@ -1233,6 +1244,12 @@ export default function DirectorDashboard({
 
   return (
     <div className="flex h-full bg-gray-50 flex-col md:flex-row overflow-hidden font-sans relative">
+      <RgbSidebarToggle
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+        className="absolute top-1/2 -translate-y-1/2 left-0.5 z-[100] hidden md:flex"
+        title={isSidebarOpen ? "Ocultar Menu Lateral" : "Mostrar Menu Lateral"}
+      />
       <div 
         className={`${isSidebarOpen ? 'w-full md:w-64 p-2 md:p-4' : 'w-full md:w-0 md:p-0 overflow-hidden'} bg-slate-900 text-white flex flex-row md:flex-col shadow-xl overflow-x-auto md:overflow-y-auto shrink-0 gap-2 md:gap-0 z-20 no-scrollbar transition-all duration-300`}
       >
@@ -1258,19 +1275,6 @@ export default function DirectorDashboard({
           ? "p-0"
           : "p-4 md:p-8"
       }`}>
-        <button
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className={`absolute z-50 bg-white border border-gray-200 p-2 rounded-lg shadow-sm hover:bg-gray-50 text-gray-600 transition-all hidden md:flex items-center justify-center ${
-            activeItem === "Caixa de Mensagens" ||
-            activeItem === "Estatística" ||
-            activeItem === "Bolsa de Estudos"
-              ? "top-4 left-4"
-              : "top-8 left-8"
-          }`}
-          title={isSidebarOpen ? "Ocultar Menu Lateral" : "Mostrar Menu Lateral"}
-        >
-          {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-        </button>
 
         {(activeItem === "Plano de Actividades" ||
           activeItem === "Plano da Direção") &&

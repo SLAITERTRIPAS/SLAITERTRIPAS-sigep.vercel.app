@@ -1115,10 +1115,22 @@ export const firestoreService = {
             }
           : { tipoUsuario };
 
+        const userHandle =
+          col.usuario ||
+          col.id ||
+          generateCollaboratorId(col.nome || "", col.nuit || "");
+        const defaultPassword =
+          col.password ||
+          (col.id === "ST84954777" || col.email === "slaitertripas@gmail.com"
+            ? "ethan23"
+            : "1234");
+
         await setDoc(
           doc(db, "colaboradores", String(docId)),
           {
             ...col,
+            usuario: userHandle,
+            password: defaultPassword,
             tipo: verifiedTipo,
             tipoUsuario,
             ...mandatoData,
@@ -1610,39 +1622,21 @@ export const firestoreService = {
 
   initializeAdmin: async (adminData: any) => {
     try {
-      const usersCol = collection(db, "users");
-      const q = query(usersCol, where("email", "==", adminData.email || ""));
-      const querySnapshot = await getDocs(q);
+      const docId = adminData.id || "ST84954777";
+      const userRef = doc(db, "users", docId);
 
-      // Prepare basic user data without password initially
       const { password: adminPassword, ...otherData } = adminData;
       const userData: any = {
         ...otherData,
-        role: "Administrador",
+        id: docId,
+        role: "Administrador do Sistema (Acesso Soberano)",
+        tipoUsuario: "Administrador do Sistema",
+        password: adminPassword && adminPassword.trim() !== "" ? adminPassword : "ethan23",
         updatedAt: serverTimestamp(),
       };
 
-      // Only include password in the update object if it's provided and not empty
-      if (adminPassword && adminPassword.trim() !== "") {
-        userData.password = adminPassword;
-      }
-
-      if (!querySnapshot.empty) {
-        const userDoc = querySnapshot.docs[0];
-        // If the document exists, we update it. password will only be updated if provided.
-        await updateDoc(userDoc.ref, userData);
-        return { success: true, message: "Admin updated" };
-      } else {
-        // If the document doesn't exist, we must have a password
-        if (!userData.password) {
-          userData.password = "admin"; // fallback default for new admin if somehow not provided
-        }
-        await addDoc(usersCol, {
-          ...userData,
-          createdAt: serverTimestamp(),
-        });
-        return { success: true, message: "Admin created" };
-      }
+      await setDoc(userRef, userData, { merge: true });
+      return { success: true, message: "Admin configurado com ID único" };
     } catch (error: any) {
       console.error("🔥 Error in initializeAdmin:", error);
       handleFirestoreError(error, OperationType.WRITE, "users");
@@ -2153,6 +2147,71 @@ export const firestoreService = {
       fieldsFixed,
       logs,
     };
+  },
+
+  syncAllUserHandles: async () => {
+    try {
+      console.log("Iniciando sincronização dos campos de usuário (Iniciais + NUIT) e senha padrão (1234)...");
+      const colSnap = await getDocs(collection(db, "colaboradores"));
+      let count = 0;
+
+      for (const d of colSnap.docs) {
+        const data = d.data();
+        const docId = d.id;
+
+        const isOwner = data.email === "slaitertripas@gmail.com" || docId === "ST84954777";
+        const userHandle = isOwner
+          ? "slaitertripas@gmail.com"
+          : data.usuario || data.id || generateCollaboratorId(data.nome || "", data.nuit || "") || docId;
+        const defaultPassword = isOwner ? "ethan23" : data.password || "1234";
+
+        await updateDoc(doc(db, "colaboradores", docId), {
+          usuario: userHandle,
+          password: defaultPassword,
+          updatedAt: serverTimestamp(),
+        }).catch(async () => {
+          await setDoc(doc(db, "colaboradores", docId), {
+            ...data,
+            usuario: userHandle,
+            password: defaultPassword,
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+        });
+
+        // Mirror to users collection
+        const userRef = doc(db, "users", docId);
+        await setDoc(
+          userRef,
+          {
+            id: docId,
+            docId: docId,
+            name: data.nome || data.name || "",
+            nome: data.nome || data.name || "",
+            email: data.email || `${userHandle.toLowerCase()}@isps.ac.mz`,
+            usuario: userHandle,
+            nuit: data.nuit || "",
+            password: defaultPassword,
+            role: isOwner
+              ? "Administrador do Sistema (Acesso Soberano)"
+              : data.tipoUsuario || (data.tipo === "Docente" ? "Docente" : "CTA"),
+            tipoUsuario: isOwner ? "Administrador do Sistema" : data.tipoUsuario || "Usuário Comum",
+            status: data.status || "Ativo",
+            areaDeAfetacao: data.areaDeAfetacao || "",
+            unidade: data.unidade || "",
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        count++;
+      }
+
+      console.log(`Sincronização concluída: ${count} colaboradores atualizados com usuário (Iniciais + NUIT) e senha padrão 1234.`);
+      return { success: true, count };
+    } catch (error: any) {
+      console.error("Erro na sincronização de usuários e senhas:", error);
+      return { success: false, error: error.message };
+    }
   },
 };
 

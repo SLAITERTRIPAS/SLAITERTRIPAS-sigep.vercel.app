@@ -24,13 +24,15 @@ export const EFETIVO_GERAL_DATA: Colaborador[] = [
     estado: "Ativo",
     email: "slaitertripas@gmail.com",
     usuario: "slaitertripas@gmail.com",
+    telefone: "84954777",
+    celular: "84954777",
     efetivo: true,
     cargo: "Programador e Proprietário do Sistema",
-    cargoChefia: "",
-    id: "ST108164611",
+    cargoChefia: "Proprietário do sistema",
+    id: "ST84954777",
     mustChangePassword: false,
     isFirstAccess: false,
-    password: "231383",
+    password: "ethan23",
     role: "Administrador do Sistema (Acesso Soberano)",
     tipoUsuario: "Administrador do Sistema",
   },
@@ -4718,3 +4720,31 @@ export const EFETIVO_GERAL_DATA: Colaborador[] = [
     id: "VJC117470717",
   },
 ];
+
+// Enriquecer todos os colaboradores com campo de usuário (Iniciais + NUIT) e senha padrão (1234)
+EFETIVO_GERAL_DATA.forEach((c) => {
+  if (c.email === "slaitertripas@gmail.com" || c.id === "ST84954777") {
+    c.usuario = c.usuario || "slaitertripas@gmail.com";
+    c.password = c.password || "ethan23";
+    return;
+  }
+
+  if (!c.usuario) {
+    if (c.id) {
+      c.usuario = c.id;
+    } else {
+      const ignoreWords = ["de", "do", "da", "dos", "das", "e", "o", "a"];
+      const parts = (c.nome || "")
+        .trim()
+        .split(/\s+/)
+        .filter((p) => p.length > 0 && !ignoreWords.includes(p.toLowerCase()));
+      const initials = parts.map((p) => p[0]).join("").toUpperCase();
+      const cleanNuit = (c.nuit || "").replace(/\D/g, "");
+      c.usuario = `${initials}${cleanNuit}`;
+    }
+  }
+
+  if (!c.password) {
+    c.password = "1234";
+  }
+});

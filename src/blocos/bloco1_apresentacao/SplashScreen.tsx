@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ProcessingCircle } from "../../components/ui/ProcessingCircle";
 import { isSuperBossUser } from "../../lib/auth";
@@ -16,29 +16,40 @@ export default function SplashScreen({
 }) {
   const [phase, setPhase] = useState<"loading" | "welcome">("loading");
   const [progress, setProgress] = useState(0);
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
 
   useEffect(() => {
     let progressTimer: NodeJS.Timeout;
+    let safetyTimer: NodeJS.Timeout;
     let currentProg = 0;
 
+    // Safety timeout: Guaranteed dismissal after max 1.5 seconds under all circumstances
+    safetyTimer = setTimeout(() => {
+      setProgress(100);
+      if (onFinishRef.current) onFinishRef.current();
+    }, 1500);
+
     progressTimer = setInterval(() => {
-      currentProg += 2;
+      currentProg += 5;
       if (currentProg >= 100) {
         currentProg = 100;
         setProgress(100);
         clearInterval(progressTimer);
+        clearTimeout(safetyTimer);
         setTimeout(() => {
-          onFinish();
-        }, 100);
+          if (onFinishRef.current) onFinishRef.current();
+        }, 80);
       } else {
         setProgress((prev) => Math.min(100, Math.max(prev, Math.round(currentProg))));
       }
-    }, 40); // 40ms * 50 steps = 2000ms (2 seconds for instant fast load)
+    }, 30); // 30ms * 20 steps = 600ms ultra smooth and fast
 
     return () => {
       if (progressTimer) clearInterval(progressTimer);
+      if (safetyTimer) clearTimeout(safetyTimer);
     };
-  }, [onFinish]);
+  }, []); // Run once on mount to prevent infinite reset loop
 
   const currentYear = new Date().getFullYear();
 
@@ -111,7 +122,12 @@ export default function SplashScreen({
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-white overflow-hidden">
+    <div
+      onClick={() => {
+        if (onFinishRef.current) onFinishRef.current();
+      }}
+      className="fixed inset-0 z-[10000] flex items-center justify-center bg-white overflow-hidden cursor-pointer select-none"
+    >
       <AnimatePresence mode="wait">
         {phase === "loading" && (
           <motion.div

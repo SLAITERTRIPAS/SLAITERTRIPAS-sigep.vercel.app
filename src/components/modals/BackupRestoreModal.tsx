@@ -31,6 +31,7 @@ import {
   restoreFullBackup,
   runAutomaticBackup,
   getStoredBackupsList,
+  getFullBackupDataForRecord,
   downloadStoredBackupFile,
   inspectSystemOrgaosData,
   SYSTEM_ORGAOS,
@@ -171,11 +172,6 @@ export default function BackupRestoreModal({
   };
 
   const handleRestoreFromStored = async (record: SystemBackupRecord) => {
-    if (!record.backupData) {
-      setErrorMessage("O backup selecionado não possui cópia bruta disponível para restauração direta.");
-      return;
-    }
-
     if (
       !window.confirm(
         `Tem a certeza que deseja restaurar a base de dados a partir do backup de ${record.formattedDate} (${record.totalRecords} registos)?`,
@@ -186,12 +182,24 @@ export default function BackupRestoreModal({
 
     try {
       setLoading(true);
-      setStatusMessage(`A restaurar backup automático de ${record.formattedDate} nos 4 Órgãos...`);
+      setStatusMessage(`A obter dados do backup de ${record.formattedDate}...`);
       setErrorMessage("");
       setSuccessMessage("");
 
+      let backupPayload = record.backupData;
+      if (!backupPayload || Object.keys(backupPayload).length === 0) {
+        backupPayload = await getFullBackupDataForRecord(record);
+      }
+
+      if (!backupPayload || Object.keys(backupPayload).length === 0) {
+        setErrorMessage("Não foi possível carregar os dados brutos deste backup para restauração.");
+        return;
+      }
+
+      setStatusMessage(`A restaurar backup de ${record.formattedDate} nos 4 Órgãos...`);
+
       const { totalRestored, restoredStats, organStats: restoredOrgans } = await restoreFullBackup(
-        record.backupData,
+        backupPayload,
         (msg) => setStatusMessage(msg),
       );
 

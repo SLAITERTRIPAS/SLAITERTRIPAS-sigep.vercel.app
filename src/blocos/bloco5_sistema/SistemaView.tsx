@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import RgbSidebarToggle from "../../components/ui/RgbSidebarToggle";
 import { getCircularReplacer, safeJSONStringify } from "../../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -857,28 +858,66 @@ export default function SistemaView({
                 <h2 className="text-2xl font-black text-blue-900 mb-6 tracking-widest">
                   Sobre o SIGEP
                 </h2>
-                <button
-                  onClick={async () => {
-                    const result = await firestoreService.initializeAdmin({
-                      name: ownerName || "Slaiter Tripas",
-                      email: itEmail || "slaitertripas@gmail.com",
-                      nuit: user?.nuit || "108164611",
-                      password: adminPassword || "231383",
-                      whatsapp: itWhatsapp || "+258 84 9547771",
-                      linkedin: itLinkedin || "linkedin.com/in/fttripas",
-                      facebook: itFacebook || "facebook.com/fttripas",
-                      website: itWeb || "www.fttipas.com",
-                    });
-                    alert(
-                      result.success
-                        ? "Admin atualizado!"
-                        : "Erro: " + result.error,
-                    );
-                  }}
-                  className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 mb-6"
-                >
-                  Atualizar Dados do Administrador
-                </button>
+                <div className="flex flex-wrap gap-3 mb-6">
+                  <button
+                    onClick={async () => {
+                      const result = await firestoreService.initializeAdmin({
+                        name: ownerName || "Slaiter Tripas",
+                        email: itEmail || "slaitertripas@gmail.com",
+                        nuit: user?.nuit || "108164611",
+                        password: adminPassword || "ethan23",
+                        whatsapp: itWhatsapp || "+258 84 9547771",
+                        linkedin: itLinkedin || "linkedin.com/in/fttripas",
+                        facebook: itFacebook || "facebook.com/fttripas",
+                        website: itWeb || "www.fttipas.com",
+                      });
+                      alert(
+                        result.success
+                          ? "Admin atualizado com sucesso!"
+                          : "Erro: " + result.error,
+                      );
+                    }}
+                    className="bg-blue-600 text-white px-4 py-2.5 rounded-xl font-medium text-xs shadow hover:bg-blue-700 transition-all cursor-pointer"
+                  >
+                    Atualizar Dados do Administrador
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      const res = await firestoreService.syncAllUserHandles();
+                      if (res.success) {
+                        alert(`Sucesso! ${res.count} colaboradores atualizados no Firestore com usuário (Iniciais + NUIT) e senha padrão 1234.`);
+                      } else {
+                        alert("Erro na sincronização: " + res.error);
+                      }
+                    }}
+                    className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-medium text-xs shadow hover:bg-emerald-700 transition-all cursor-pointer"
+                  >
+                    Sincronizar Usuários no Firestore (Iniciais + NUIT & Senha 1234)
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const rows = EFETIVO_GERAL_DATA.map((c) => {
+                        const isOwner = c.email === "slaitertripas@gmail.com" || c.id === "ST84954777";
+                        const userHandle = isOwner ? "slaitertripas@gmail.com" : (c.usuario || c.id || "");
+                        const pwd = isOwner ? "ethan23" : (c.password || "1234");
+                        return `"${c.nome}","${c.email || ""}","${c.nuit || ""}","${userHandle}","${pwd}"`;
+                      });
+                      const csvHeader = "Nome,Email,NUIT,Usuario_Vercel,Senha_Padrao\n";
+                      const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(csvHeader + rows.join("\n"));
+                      const link = document.createElement("a");
+                      link.setAttribute("href", csvContent);
+                      link.setAttribute("download", `usuarios_sigep_vercel_${new Date().toISOString().split("T")[0]}.csv`);
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="bg-purple-600 text-white px-4 py-2.5 rounded-xl font-medium text-xs shadow hover:bg-purple-700 transition-all cursor-pointer"
+                  >
+                    Exportar Lista de Usuários Vercel (CSV)
+                  </button>
+                </div>
                 <div className="text-justify text-sm leading-relaxed space-y-4 text-gray-700">
                   <p>
                     O{" "}
@@ -1755,15 +1794,12 @@ export default function SistemaView({
               : "p-2 md:p-4"
           }`}
         >
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className={`absolute z-50 bg-white border border-gray-200 p-2 rounded-lg shadow-sm hover:bg-gray-50 text-gray-600 transition-all hidden md:flex items-center justify-center ${
-              ["Centro de Mensagens", "Caixa de Mensagens"].includes(activeItem) ? "top-4 right-4" : "top-8 right-8"
-            }`}
+          <RgbSidebarToggle
+            isOpen={isMenuOpen}
+            onToggle={() => setIsMenuOpen(!isMenuOpen)}
+            className="absolute top-1/2 -translate-y-1/2 right-1 z-50 hidden md:flex"
             title={isMenuOpen ? "Ocultar Menu Lateral" : "Mostrar Menu Lateral"}
-          >
-            {isMenuOpen ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
-          </button>
+          />
 
           <div
             className={`h-full w-full mx-auto flex flex-col min-h-0 ${["Centro de Mensagens", "Caixa de Mensagens"].includes(activeItem) ? "max-w-full overflow-hidden" : "max-w-full scrollbar overflow-y-auto"}`}

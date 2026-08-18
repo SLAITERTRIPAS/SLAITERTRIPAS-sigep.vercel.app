@@ -87,6 +87,7 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import RgbSidebarToggle from "../../components/ui/RgbSidebarToggle";
 import LoadingSpinner from "../bloco1_apresentacao/LoadingSpinner";
 import { ProcessingCircle } from "../../components/ui/ProcessingCircle";
 import IndividualProcessForm from "../bloco8_gerais/IndividualProcessForm";
@@ -7375,9 +7376,19 @@ export default function GestaoPessoalView({
     <div className="h-full w-full bg-slate-50/30 flex flex-col font-sans overflow-hidden">
       <div className="flex-grow flex flex-col md:flex-row overflow-hidden p-2 md:p-4 gap-2 md:gap-4 h-full relative">
         {!hideSidebar && (
+          <RgbSidebarToggle
+            isOpen={isSidebarOpen}
+            onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="absolute top-1/2 -translate-y-1/2 left-0.5 z-[100] hidden md:flex"
+          />
+        )}
+        {!hideSidebar && (
           <aside className={`transition-all duration-300 ${isSidebarOpen ? 'w-36 md:w-72 p-2 md:p-4 opacity-100' : 'w-0 p-0 overflow-hidden opacity-0 border-none md:hidden'} bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-[0_10px_40px_rgb(0,0,0,0.04)] border border-slate-100 flex-none flex flex-col overflow-y-auto gap-1 md:gap-2 relative z-20 h-full scrollbar-none`}>
-            <div className="mb-6 px-4 py-2 border-b border-slate-100 hidden md:block">
-              <h2 className="text-[10px] font-black text-slate-400 tracking-[0.2em]">
+            <div className="mb-4 px-3 py-2.5 border-b border-slate-100 flex items-center gap-2.5">
+              <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg shrink-0">
+                <Users size={16} strokeWidth={2.5} />
+              </div>
+              <h2 className="text-[11px] font-black uppercase tracking-wider text-slate-800 truncate">
                 Repartição de Pessoal
               </h2>
             </div>
@@ -7465,15 +7476,6 @@ export default function GestaoPessoalView({
         <main
           className={`flex-grow h-full overflow-hidden bg-white ${!hideSidebar ? "rounded-[2rem] shadow-[0_10px_40px_rgb(0,0,0,0.04)] border border-slate-100" : ""} relative`}
         >
-          {!hideSidebar && (
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="absolute top-4 left-4 z-[50] bg-white border border-gray-200 p-2 rounded-lg shadow-sm hover:bg-gray-50 text-gray-600 transition-all hidden md:flex items-center justify-center"
-              title={isSidebarOpen ? "Ocultar Menu Lateral" : "Mostrar Menu Lateral"}
-            >
-              {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
-            </button>
-          )}
           <div className="h-full overflow-y-auto">{renderContent()}</div>
         </main>
 

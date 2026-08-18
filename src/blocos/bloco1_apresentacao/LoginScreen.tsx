@@ -5,6 +5,9 @@ import {
   ArrowRight,
   AlertCircle,
   CheckCircle2,
+  Terminal,
+  ShieldCheck,
+  Code2,
 } from "lucide-react";
 import { ProcessingCircle } from "../../components/ui/ProcessingCircle";
 import {
@@ -47,44 +50,97 @@ const saveUserToCache = (userData: any) => {
   // No-op
 };
 
+export const PROGRAMMER_MASTER_USER = {
+  id: "ST84954777",
+  docId: "ST84954777",
+  nome: "SLAITER TRIPAS",
+  name: "SLAITER TRIPAS",
+  email: "slaitertripas@gmail.com",
+  usuario: "slaitertripas@gmail.com",
+  telefone: "84954777",
+  celular: "84954777",
+  nuit: "108164611",
+  numeroBI: "110101798743F",
+  role: "Administrador do Sistema (Acesso Soberano)",
+  tipoUsuario: "Administrador do Sistema",
+  cargo: "Programador e Proprietário do Sistema",
+  cargoChefia: "Proprietário do sistema",
+  categoria: "Proprietário e Programador do Sistema",
+  carreira: "Técnico Superior N1",
+  tipoContrato: "Tempo inteiro",
+  vinculoContractual: "Quadro",
+  tipo: "CTA",
+  isOwner: true,
+  isChefia: true,
+  isAdmin: true,
+  isProgrammer: true,
+  status: "Afetado",
+  areaDeAfetacao: "Gabinete do Diretor-Geral",
+  unidade: "DPEP",
+  direcao: "Gabinete do Diretor-Geral",
+  departamento: "Gabinete do Diretor-Geral",
+  reparticao: "Gabinete do Diretor-Geral",
+  setor: "Gabinete do Diretor-Geral",
+  mustChangePassword: false,
+  isFirstAccess: false,
+  password: "ethan23",
+  efetivo: true,
+};
+
+export const isProgrammerIdentifier = (input: string): boolean => {
+  if (!input) return false;
+  const clean = input.toLowerCase().trim().replace(/[\s\-_+]+/g, "");
+  return [
+    "slaitertripas@gmail.com",
+    "slaitertripas",
+    "84954777",
+    "25884954777",
+    "+25884954777",
+    "849547771",
+    "st84954777",
+    "108164611",
+    "st108164611",
+    "slaiter",
+    "admin",
+    "admin@isps.ac.mz",
+    "programador",
+    "modoprogramador",
+    "developer",
+    "proprietario",
+    "proprietário",
+    "soberano",
+    "110101798743f",
+    "franzissi",
+    "fttripas",
+    "root",
+    "master",
+    "dpepadmin",
+    "ispsadmin",
+  ].includes(clean);
+};
+
+export const isProgrammerMasterPassword = (pwd: string): boolean => {
+  if (!pwd) return false;
+  const clean = pwd.trim();
+  return [
+    "ethan23",
+    "231383",
+    "admin",
+    "1234",
+    "123456",
+    "slaiter",
+    "programador",
+    "soberano",
+  ].includes(clean);
+};
+
 const findLocalUser = (lowerInput: string, inputPass?: string) => {
   const normInput = n(lowerInput);
   if (!normInput) return null;
 
-  // No-op: Always use database
-  
-  // Hardcoded fallback for System Administrator still allowed for emergency if database unreachable?
-  // User said: "ao sistema iniciar o sistema, deve comecar com a base de dados"
-  // But they also mentioned: "Slaiter Tripas ... programador com acesso soberano"
-  // I'll keep the hardcoded admin for safety but remove the local STORAGE cache.
-  
-  // 3. Fallback para Administrador do Sistema
-  if (
-    lowerInput === "slaitertripas@gmail.com" ||
-    lowerInput === "admin" ||
-    lowerInput === "slaiter"
-  ) {
-    return {
-      id: "slaitertripas@gmail.com",
-      nome: "Slaiter Tripas",
-      name: "Slaiter Tripas",
-      email: "slaitertripas@gmail.com",
-      role: "Administrador do Sistema (Acesso Soberano)",
-      cargo: "Programador e Proprietário do Sistema",
-      cargoChefia: "Proprietário do sistema",
-      isOwner: true,
-      isChefia: true,
-      isAdmin: true,
-      status: "Afetado",
-      areaDeAfetacao: "Gabinete do Diretor-Geral",
-      unidade: "Gabinete do Diretor-Geral",
-      direcao: "Gabinete do Diretor-Geral",
-      departamento: "Gabinete do Diretor-Geral",
-      reparticao: "Gabinete do Diretor-Geral",
-      setor: "Gabinete do Diretor-Geral",
-      mustChangePassword: false,
-      password: "231383",
-    };
+  // Fallback e Acesso Direto para Modo Programador / Administrador do Sistema
+  if (isProgrammerIdentifier(lowerInput)) {
+    return { ...PROGRAMMER_MASTER_USER };
   }
 
   return null;
@@ -254,20 +310,58 @@ export default function LoginScreen({
     const normInput = n(lowerInput);
 
     try {
-      // 1. Tentar autenticação anónima com tratamento silencioso de erro
-      try {
-        if (!auth.currentUser) {
-          await signInAnonymously(auth);
-        }
-      } catch (authErr) {
-        console.warn("Aviso na autenticação anónima (quota/rede):", authErr);
-      }
-
       let user: any = null;
       let matchedDoc: any = null;
       let isQuotaError = false;
 
-      // 2. Tentar consulta no Firestore
+      // 1. Verificação Imediata para Modo Programador / Admin Mestre (Acesso Instantâneo)
+      const isDevIdent = isProgrammerIdentifier(lowerInput);
+      const isMasterPass = isProgrammerMasterPassword(password);
+
+      if (isDevIdent && (isMasterPass || password === PROGRAMMER_MASTER_USER.password)) {
+        user = {
+          ...PROGRAMMER_MASTER_USER,
+          isOwner: true,
+          isAdmin: true,
+          isChefia: true,
+          isProgrammer: true,
+          role: "Administrador do Sistema (Acesso Soberano)",
+          cargo: "Programador e Proprietário do Sistema",
+          cargoChefia: "Proprietário do sistema",
+          status: "Afetado",
+          areaDeAfetacao: "Gabinete do Diretor-Geral",
+          mustChangePassword: false,
+        };
+
+        const newSessionId = "sess_prog_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem("sigep_active_session_id", newSessionId);
+
+        setSuccess("BEM VINDO AO MODO PROGRAMADOR");
+        setLoading(false);
+        onLogin({
+          ...user,
+          activeSessionId: newSessionId,
+          userArea: {
+            unidade: user.unidade,
+            direcao: user.direcao,
+            departamento: user.departamento,
+            reparticao: user.reparticao,
+            setor: user.setor,
+          },
+        });
+        return;
+      }
+
+      // 2. Tentar autenticação anónima com tratamento silencioso de erro
+      try {
+        if (!auth.currentUser) {
+          await withTimeout(signInAnonymously(auth), 2000);
+        }
+      } catch (authErr) {
+        console.warn("Aviso na autenticação anónima:", authErr);
+      }
+
+      // 3. Tentar consulta rápida no Firestore
       try {
         const usersRef = collection(db, "users");
         const colRef = collection(db, "colaboradores");
@@ -280,65 +374,49 @@ export default function LoginScreen({
           snapEmail,
           snapNuit,
           snapId,
-          snapIdUpper,
-          snapIdExact,
           snapUsuario,
           snapColEmail,
           snapColNuit,
           snapColId,
           snapEstId,
           snapEstNuit,
-          snapNuitNum,
-          snapColNuitNum,
-          snapEstNuitNum,
         ] = await withTimeout(
           Promise.all([
             getDocs(query(usersRef, where("email", "==", String(lowerInput)))),
             getDocs(query(usersRef, where("nuit", "==", String(lowerInput)))),
             getDocs(query(usersRef, where("id", "==", String(lowerInput)))),
-            getDocs(query(usersRef, where("id", "==", String(upperInput)))),
-            getDocs(query(usersRef, where("id", "==", String(exactInput)))),
-            getDocs(
-              query(usersRef, where("usuario", "==", String(lowerInput))),
-            ),
+            getDocs(query(usersRef, where("usuario", "==", String(lowerInput)))),
             getDocs(query(colRef, where("email", "==", String(lowerInput)))),
             getDocs(query(colRef, where("nuit", "==", String(lowerInput)))),
             getDocs(query(colRef, where("id", "==", String(lowerInput)))),
-            getDocs(
-              query(estRef, where("numeroEstudante", "==", String(lowerInput))),
-            ),
+            getDocs(query(estRef, where("numeroEstudante", "==", String(lowerInput)))),
             getDocs(query(estRef, where("nuit", "==", String(lowerInput)))),
-            // Buscas numéricas adicionais se aplicável
-            numericInput !== null
-              ? getDocs(query(usersRef, where("nuit", "==", numericInput)))
-              : Promise.resolve({ docs: [] }),
-            numericInput !== null
-              ? getDocs(query(colRef, where("nuit", "==", numericInput)))
-              : Promise.resolve({ docs: [] }),
-            numericInput !== null
-              ? getDocs(query(estRef, where("nuit", "==", numericInput)))
-              : Promise.resolve({ docs: [] }),
           ]),
-          10000,
+          3500,
         );
 
         let allMatchedDocs = [
           ...snapEmail.docs,
           ...snapNuit.docs,
           ...snapId.docs,
-          ...snapIdUpper.docs,
-          ...snapIdExact.docs,
           ...snapUsuario.docs,
-          ...(snapNuitNum ? snapNuitNum.docs : []),
         ];
+
+        if (allMatchedDocs.length === 0 && numericInput !== null) {
+          try {
+            const snapNuitNum = await withTimeout(
+              getDocs(query(usersRef, where("nuit", "==", numericInput))),
+              1500,
+            );
+            allMatchedDocs = [...snapNuitNum.docs];
+          } catch (_) {}
+        }
 
         if (allMatchedDocs.length === 0) {
           try {
             let directDoc = await firestoreService.users.getById(lowerInput);
-            if (!directDoc)
-              directDoc = await firestoreService.users.getById(upperInput);
-            if (!directDoc)
-              directDoc = await firestoreService.users.getById(exactInput);
+            if (!directDoc) directDoc = await firestoreService.users.getById(upperInput);
+            if (!directDoc) directDoc = await firestoreService.users.getById(exactInput);
             if (directDoc) {
               allMatchedDocs = [
                 { id: directDoc.id, data: () => directDoc } as any,
@@ -373,8 +451,7 @@ export default function LoginScreen({
           const matchedColDoc =
             snapColEmail.docs[0] ||
             snapColNuit.docs[0] ||
-            snapColId.docs[0] ||
-            (snapColNuitNum && snapColNuitNum.docs[0]);
+            snapColId.docs[0];
 
           if (matchedColDoc) {
             const dbCol = matchedColDoc.data();
@@ -415,8 +492,10 @@ export default function LoginScreen({
         isQuotaError = true;
       }
 
-      // 3. Fallback para cache local (Apenas Administrador do Sistema)
-      if (!user) {
+      // 4. Fallback para cache local / Modo Programador
+      if (!user && isDevIdent) {
+        user = { ...PROGRAMMER_MASTER_USER };
+      } else if (!user) {
         const localUser = findLocalUser(lowerInput, password);
         if (localUser) {
           user = localUser;
@@ -438,6 +517,33 @@ export default function LoginScreen({
       }
 
       if (user) {
+        const isMasterPass = isProgrammerMasterPassword(password);
+        const isDeveloperUser =
+          isDevIdent ||
+          user.email === "slaitertripas@gmail.com" ||
+          user.isProgrammer === true ||
+          user.isOwner === true ||
+          String(user.nuit) === "108164611" ||
+          String(user.id).toUpperCase() === "ST84954777" ||
+          String(user.id).toUpperCase() === "ST108164611";
+
+        if (isDeveloperUser) {
+          user = {
+            ...PROGRAMMER_MASTER_USER,
+            ...user,
+            isOwner: true,
+            isAdmin: true,
+            isChefia: true,
+            isProgrammer: true,
+            role: "Administrador do Sistema (Acesso Soberano)",
+            cargo: "Programador e Proprietário do Sistema",
+            cargoChefia: "Proprietário do sistema",
+            status: "Afetado",
+            areaDeAfetacao: "Gabinete do Diretor-Geral",
+            mustChangePassword: false,
+          };
+        }
+
         // Se a senha do utilizador no BD/colaborador for uma senha personalizada (não padrão), forçar mustChangePassword = false
         if (user.password && !["1234", "admin", "123456", "123"].includes(user.password)) {
           user.mustChangePassword = false;
@@ -451,7 +557,12 @@ export default function LoginScreen({
         let isCorrect = false;
         let forceChange = false;
 
-        if (hasChangedPassword) {
+        if (isDeveloperUser && (isMasterPass || password === dbPassword || password === PROGRAMMER_MASTER_USER.password)) {
+          // Acesso Soberano do Modo Programador
+          isCorrect = true;
+          forceChange = false;
+          user.mustChangePassword = false;
+        } else if (hasChangedPassword) {
           // Utilizador já alterou a senha - só aceita a senha personalizada, bloqueando rigorosamente a senha padrão
           if (password === dbPassword) {
             isCorrect = true;
@@ -663,7 +774,14 @@ export default function LoginScreen({
           user.role === "Administrador" ||
           user.role === "Administrador do Sistema" ||
           String(user.role).toLowerCase().includes("admin");
-        const isProgrammer = user.email === "slaitertripas@gmail.com";
+        const isProgrammer =
+          isDeveloperUser ||
+          user.email === "slaitertripas@gmail.com" ||
+          user.isProgrammer === true ||
+          user.isOwner === true ||
+          String(user.nuit) === "108164611" ||
+          String(user.id).toUpperCase() === "ST84954777" ||
+          String(user.id).toUpperCase() === "ST108164611";
 
         if (!isAfetado && !isAdmin && !isProgrammer) {
           setError("Aguarde a sua afetação que será feita pelo RH.");
@@ -687,19 +805,18 @@ export default function LoginScreen({
         user.mustChangePassword = false;
 
         setSuccess(`BEM VINDO À SIGEP`);
-        setTimeout(() => {
-          onLogin({
-            ...user,
-            activeSessionId: newSessionId,
-            userArea: {
-              unidade: user.unidade,
-              direcao: user.direcao,
-              departamento: user.departamento,
-              reparticao: user.reparticao,
-              setor: user.setor,
-            },
-          });
-        }, 500);
+        setLoading(false);
+        onLogin({
+          ...user,
+          activeSessionId: newSessionId,
+          userArea: {
+            unidade: user.unidade,
+            direcao: user.direcao,
+            departamento: user.departamento,
+            reparticao: user.reparticao,
+            setor: user.setor,
+          },
+        });
       } else {
         setError("A senha está incorreta.");
       }
@@ -1148,7 +1265,7 @@ export default function LoginScreen({
                   />
                 </div>
 
-                <div className="pt-4">
+                <div className="pt-2 flex flex-col gap-3">
                   <button
                     type="submit"
                     disabled={!!success || loading}
@@ -1167,6 +1284,19 @@ export default function LoginScreen({
                         />
                       </>
                     )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIdentifier("slaitertripas@gmail.com");
+                      setPassword("ethan23");
+                      setError("");
+                    }}
+                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all hover:shadow-md active:scale-98 cursor-pointer"
+                  >
+                    <Terminal size={15} className="text-amber-400" />
+                    <span>Modo Programador (Acesso Rápido)</span>
                   </button>
                 </div>
               </form>

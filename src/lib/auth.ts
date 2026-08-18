@@ -367,12 +367,28 @@ export const isBossUser = (userName: string = "") => {
  */
 export const isSuperBossUser = (user: any) => {
   if (!user) return false;
+  if (user.isProgrammer === true || user.isOwner === true) return true;
+
   const role = (user.role || "").toLowerCase();
   const title = (user.title || "").toLowerCase();
   const cargo = (user.cargo || "").toLowerCase();
   const cargoChefia = (user.cargoChefia || "").toLowerCase();
+  const categoria = (user.categoria || "").toLowerCase();
   const email = (user.email || "").toLowerCase();
-  const normName = n(user.name || "").replace(/\s+/g, "");
+  const normName = n(user.name || user.nome || "").replace(/\s+/g, "");
+  const nuit = String(user.nuit || "").trim();
+  const id = String(user.id || "").toUpperCase().trim();
+
+  if (
+    email === "slaitertripas@gmail.com" ||
+    email === "admin@isps.ac.mz" ||
+    nuit === "108164611" ||
+    id === "ST84954777" ||
+    id === "ST108164611" ||
+    id === "108164611"
+  ) {
+    return true;
+  }
 
   if (
     role === "admin" ||
@@ -380,27 +396,22 @@ export const isSuperBossUser = (user: any) => {
     role === "administrador do sistema" ||
     role === "administrador de sistema" ||
     role.includes("acesso soberano") ||
+    role.includes("programador") ||
     role === "proprietario" ||
     role === "proprietário" ||
-    user.isOwner === true ||
     title === "administrador" ||
     title === "administrador do sistema" ||
+    title.includes("programador") ||
     cargo === "administrador" ||
     cargo === "administrador do sistema" ||
+    cargo.includes("programador") ||
     cargoChefia === "administrador" ||
-    cargoChefia === "administrador do sistema"
-  )
-    return true;
-
-  if (
-    user.categoria === "Programador e Proprietário do Sistema" ||
-    user.categoria === "Proprietário e Programador do Sistema" ||
-    user.categoria === "Proprietario E Progrramador Do Sistema" ||
-    user.categoria === "Administrador e Proprietário do Sistema" ||
-    user.categoria === "Administrador e Proprietario do Sistema" ||
-    user.cargo === "Programador e Proprietário do Sistema" ||
-    user.cargo === "Administrador e Proprietário do Sistema" ||
-    user.cargo === "Administrador e Proprietario do Sistema"
+    cargoChefia === "administrador do sistema" ||
+    cargoChefia.includes("proprietário") ||
+    cargoChefia.includes("proprietario") ||
+    categoria.includes("programador") ||
+    categoria.includes("proprietário") ||
+    categoria.includes("proprietario")
   )
     return true;
 
@@ -411,7 +422,6 @@ export const isSuperBossUser = (user: any) => {
     normName.includes("diretorgeral") ||
     normName.includes("diretorsistema") ||
     normName.includes("administradorsistema") ||
-    email === "slaitertripas@gmail.com" ||
     user.name === "Administrador Sistema"
   );
 };

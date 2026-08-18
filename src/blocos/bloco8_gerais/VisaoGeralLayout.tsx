@@ -306,14 +306,14 @@ export default function VisaoGeralLayout({
       return (
         <div className="flex flex-col gap-8">
           {/* Seletor de Unidade para Repartição de Pessoal */}
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-200 mx-4 max-w-[1600px] xl:mx-auto w-full shadow-sm">
+          <div className="bg-white p-5 rounded-[1.8rem] border border-slate-200 mx-4 max-w-[1600px] xl:mx-auto w-full shadow-sm">
             <div className="flex flex-col md:flex-row items-end gap-4">
               <div className="flex-1 w-full">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">
                   Filtrar por Direção / Unidade Orgânica
                 </label>
                 <select
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                   value={selectedDirecao || ""}
                   onChange={(e) => {
                     setSelectedDirecao(e.target.value || null);

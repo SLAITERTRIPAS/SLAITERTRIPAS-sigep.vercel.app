@@ -60,6 +60,7 @@ export interface Colaborador {
   biEm?: string;
   dataAdmissao?: string;
   telefone?: string;
+  celular?: string;
   fotoUrl?: string;
   filiacaoPai?: string;
   filiacaoMae?: string;

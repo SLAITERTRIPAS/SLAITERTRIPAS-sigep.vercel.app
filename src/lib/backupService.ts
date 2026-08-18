@@ -1,5 +1,5 @@
 import { db } from "./firebase";
-import { getCircularReplacer, safeJSONStringify, cleanObject } from "./utils";
+import { getCircularReplacer, safeJSONStringify, cleanObject, clearCachedBaseline } from "./utils";
 import {
   collection,
   getDocs,
@@ -46,7 +46,7 @@ export interface SystemBackupRecord {
   totalSizeKB: number;
   organStats: Record<string, number>;
   collectionStats: Record<string, number>;
-  backupData?: BackupData;
+  backupData?: BackupData | null;
   status: "completed" | "in_progress" | "failed";
 }
 
@@ -545,16 +545,26 @@ export function extractCollectionsFromAnyBackupFormat(rawInput: any): Record<str
 
   let target = rawInput;
 
-  // Unpack wrappers if present
-  if (target.backupData && typeof target.backupData === "object" && !Array.isArray(target.backupData)) {
-    target = target.backupData;
-  } else if (target.data && typeof target.data === "object" && !Array.isArray(target.data)) {
-    const keys = Object.keys(target.data);
-    if (keys.some((k) => Array.isArray(target.data[k]) || typeof target.data[k] === "object")) {
-      target = target.data;
+  // Unpack wrappers if present (recursively if needed)
+  for (let depth = 0; depth < 3; depth++) {
+    if (target && typeof target === "object" && !Array.isArray(target)) {
+      if (target.backupData && typeof target.backupData === "object" && !Array.isArray(target.backupData)) {
+        target = target.backupData;
+      } else if (target.data && typeof target.data === "object" && !Array.isArray(target.data)) {
+        const keys = Object.keys(target.data);
+        if (keys.some((k) => Array.isArray(target.data[k]) || typeof target.data[k] === "object")) {
+          target = target.data;
+        } else {
+          break;
+        }
+      } else if (target.collections && typeof target.collections === "object" && !Array.isArray(target.collections)) {
+        target = target.collections;
+      } else if (target.record && typeof target.record === "object" && target.record.backupData) {
+        target = target.record.backupData;
+      } else {
+        break;
+      }
     }
-  } else if (target.collections && typeof target.collections === "object" && !Array.isArray(target.collections)) {
-    target = target.collections;
   }
 
   const collectionsMap: Record<string, any[]> = {};
@@ -574,7 +584,7 @@ export function extractCollectionsFromAnyBackupFormat(rawInput: any): Record<str
 
   // Iterar por todas as chaves do objeto de backup
   for (const [rawKey, rawValue] of Object.entries(target)) {
-    if (!rawKey || rawKey.startsWith("_localStorage_") || rawKey.startsWith("_metadata_")) {
+    if (!rawKey || rawKey.startsWith("_localStorage_") || rawKey.startsWith("_metadata_") || rawKey === "status" || rawKey === "totalRecords" || rawKey === "collectionStats" || rawKey === "organStats") {
       continue;
     }
 
@@ -590,16 +600,26 @@ export function extractCollectionsFromAnyBackupFormat(rawInput: any): Record<str
         collectionsMap[normalizedKey] = (collectionsMap[normalizedKey] || []).concat(rawValue);
       }
     } else if (rawValue && typeof rawValue === "object") {
-      // Document map { "id1": { ... }, "id2": { ... } }
-      const entries = Object.entries(rawValue);
-      const isDocMap = entries.every(([_, v]) => v && typeof v === "object" && !Array.isArray(v));
-
-      if (isDocMap && entries.length > 0) {
-        const docs = entries.map(([docId, docData]) => ({
-          id: (docData as any).id || docId,
-          ...(docData as any),
-        }));
-        collectionsMap[normalizedKey] = (collectionsMap[normalizedKey] || []).concat(docs);
+      if (Array.isArray((rawValue as any).docs)) {
+        collectionsMap[normalizedKey] = (collectionsMap[normalizedKey] || []).concat((rawValue as any).docs);
+      } else if (Array.isArray((rawValue as any).items)) {
+        collectionsMap[normalizedKey] = (collectionsMap[normalizedKey] || []).concat((rawValue as any).items);
+      } else if (Array.isArray((rawValue as any).records)) {
+        collectionsMap[normalizedKey] = (collectionsMap[normalizedKey] || []).concat((rawValue as any).records);
+      } else if (Array.isArray((rawValue as any).data)) {
+        collectionsMap[normalizedKey] = (collectionsMap[normalizedKey] || []).concat((rawValue as any).data);
+      } else {
+        // Document map { "id1": { ... }, "id2": { ... } }
+        const entries = Object.entries(rawValue);
+        const docs = entries
+          .filter(([_, v]) => v && typeof v === "object")
+          .map(([docId, docData]) => ({
+            id: (docData as any).id || docId,
+            ...(docData as any),
+          }));
+        if (docs.length > 0) {
+          collectionsMap[normalizedKey] = (collectionsMap[normalizedKey] || []).concat(docs);
+        }
       }
     }
   }
@@ -848,6 +868,7 @@ export async function exportFullBackup(
 
 /**
  * Restaura exclusivamente os DADOS de utilizador para o Firestore e LocalStorage por Órgão.
+ * Garante persistência incondicional, limpeza de IDs com barra, idempotência e sincronização de cache.
  */
 export async function restoreFullBackup(
   data: BackupData,
@@ -866,6 +887,40 @@ export async function restoreFullBackup(
 
   // 1. Extrair e normalizar coleções do ficheiro de backup
   const collectionsMap = extractCollectionsFromAnyBackupFormat(data);
+
+  // Garantir sincronização mútua de coleções essenciais:
+  // Se matrix_activities existe e actividades não (ou vice-versa), preencher ambas
+  if (collectionsMap["matrix_activities"] && collectionsMap["matrix_activities"].length > 0) {
+    if (!collectionsMap["actividades"] || collectionsMap["actividades"].length === 0) {
+      collectionsMap["actividades"] = [...collectionsMap["matrix_activities"]];
+    }
+  } else if (collectionsMap["actividades"] && collectionsMap["actividades"].length > 0) {
+    if (!collectionsMap["matrix_activities"] || collectionsMap["matrix_activities"].length === 0) {
+      collectionsMap["matrix_activities"] = [...collectionsMap["actividades"]];
+    }
+  }
+
+  // Se colaboradores foram restaurados, extrair e sincronizar colaboradores_chefia
+  if (collectionsMap["colaboradores"] && collectionsMap["colaboradores"].length > 0) {
+    const chefiasFromColabs = collectionsMap["colaboradores"].filter((c: any) => {
+      if (!c) return false;
+      const cargo = String(c.cargoChefia || c.cargo || c.funcao || "").toLowerCase();
+      return (
+        c.isChefia === true ||
+        cargo.includes("diretor") ||
+        cargo.includes("director") ||
+        cargo.includes("chefe") ||
+        cargo.includes("coordenador") ||
+        cargo.includes("reitor") ||
+        cargo.includes("decano")
+      );
+    });
+
+    if (chefiasFromColabs.length > 0 && (!collectionsMap["colaboradores_chefia"] || collectionsMap["colaboradores_chefia"].length === 0)) {
+      collectionsMap["colaboradores_chefia"] = chefiasFromColabs;
+    }
+  }
+
   const collectionNames = Object.keys(collectionsMap);
 
   let totalDocsInFile = 0;
@@ -891,12 +946,12 @@ export async function restoreFullBackup(
     protectedSessionState[k] = localStorage.getItem(k);
   });
 
-  // Limpar chaves antigas de dados locais (preservando a sessão)
-  SESSION_KEYS_TO_PROTECT.forEach((k) => {
-    if (protectedSessionState[k] !== null) {
-      localStorage.setItem(k, protectedSessionState[k]!);
-    }
-  });
+  // Limpar cache de baseline em memória
+  try {
+    clearCachedBaseline();
+  } catch (e) {
+    // Ignorar se não aplicável
+  }
 
   // 3. Processar coleção por coleção e gravar no Firestore e LocalStorage
   let processedCollections = 0;
@@ -904,8 +959,8 @@ export async function restoreFullBackup(
 
   for (const collName of collectionNames) {
     processedCollections++;
-    const docs = collectionsMap[collName];
-    if (!docs || docs.length === 0) continue;
+    const rawDocs = collectionsMap[collName];
+    if (!rawDocs || rawDocs.length === 0) continue;
 
     // Descobrir qual órgão é responsável por esta coleção
     const organ =
@@ -913,7 +968,7 @@ export async function restoreFullBackup(
       SYSTEM_ORGAOS.find((o) => o.id === "sistema") ||
       SYSTEM_ORGAOS[0];
 
-    const msg = `[${processedCollections}/${totalCollections}] ${organ.name} → A restaurar "${collName}" (${docs.length} registos)...`;
+    const msg = `[${processedCollections}/${totalCollections}] ${organ.name} → A restaurar "${collName}" (${rawDocs.length} registos)...`;
     if (onProgress) onProgress(msg);
 
     dispatchBackupAlert({
@@ -926,9 +981,9 @@ export async function restoreFullBackup(
     let collCount = 0;
     const sanitizedDocsForLocal: any[] = [];
 
-    // Gravar em blocos de até 400 documentos (limite do Firestore batch é 500)
-    for (let i = 0; i < docs.length; i += 400) {
-      const chunk = docs.slice(i, i + 400);
+    // Gravar em blocos de até 200 documentos (segurança para limites de transação Firestore)
+    for (let i = 0; i < rawDocs.length; i += 200) {
+      const chunk = rawDocs.slice(i, i + 200);
 
       if (db) {
         try {
@@ -937,8 +992,9 @@ export async function restoreFullBackup(
 
           chunk.forEach((docData) => {
             if (!docData || typeof docData !== "object") return;
-            const { id, ...rest } = docData as any;
-            const targetId = String(id || "restored_" + Math.random().toString(36).substring(2, 9));
+            const { id, _collection, collection: _c, ...rest } = docData as any;
+            const rawId = String(id || "doc_" + Math.random().toString(36).substring(2, 9));
+            const targetId = rawId.replace(/\//g, "_").trim() || "doc_" + Math.random().toString(36).substring(2, 9);
             const cleanedData = cleanObject(rest) || {};
             const docRef = doc(db, collName, targetId);
 
@@ -952,13 +1008,14 @@ export async function restoreFullBackup(
           collCount += batchCount;
           totalRestored += batchCount;
         } catch (batchErr) {
-          console.warn(`Aviso ao commitar batch no Firestore para "${collName}":`, batchErr);
+          console.warn(`Aviso ao commitar batch no Firestore para "${collName}", gravando individualmente:`, batchErr);
           // Tentar gravação individual para os documentos do bloco em caso de falha no lote
           for (const docData of chunk) {
             try {
               if (!docData || typeof docData !== "object") continue;
-              const { id, ...rest } = docData as any;
-              const targetId = String(id || "restored_" + Math.random().toString(36).substring(2, 9));
+              const { id, _collection, collection: _c, ...rest } = docData as any;
+              const rawId = String(id || "doc_" + Math.random().toString(36).substring(2, 9));
+              const targetId = rawId.replace(/\//g, "_").trim() || "doc_" + Math.random().toString(36).substring(2, 9);
               const cleanedData = cleanObject(rest) || {};
               await setDoc(doc(db, collName, targetId), { ...cleanedData, id: targetId }, { merge: true });
               collCount++;
@@ -969,20 +1026,57 @@ export async function restoreFullBackup(
             }
           }
         }
+      } else {
+        // Modo offline: apenas local
+        chunk.forEach((docData) => {
+          if (!docData || typeof docData !== "object") return;
+          const { id, _collection, collection: _c, ...rest } = docData as any;
+          const targetId = String(id || "doc_" + Math.random().toString(36).substring(2, 9)).replace(/\//g, "_").trim();
+          sanitizedDocsForLocal.push({ ...rest, id: targetId });
+          collCount++;
+          totalRestored++;
+        });
       }
     }
 
-    // Atualizar cache local da coleção
+    // Atualizar cache local da coleção (em ambas as chaves para compatibilidade absoluta)
     try {
       if (sanitizedDocsForLocal.length > 0) {
-        localStorage.setItem(`sigep_${collName}`, safeJSONStringify(sanitizedDocsForLocal));
+        const jsonStr = safeJSONStringify(sanitizedDocsForLocal);
+        localStorage.setItem(`sigep_local_${collName}`, jsonStr);
+        localStorage.setItem(`sigep_${collName}`, jsonStr);
       }
     } catch (lsErr) {
-      // Ignorar se quota do localStorage estiver cheia
+      console.warn(`Aviso de quota localStorage para ${collName}:`, lsErr);
     }
 
     restoredStats[collName] = (restoredStats[collName] || 0) + collCount;
     organStats[organ.id] = (organStats[organ.id] || 0) + collCount;
+  }
+
+  // Restaurar chaves de sessão protegidas
+  SESSION_KEYS_TO_PROTECT.forEach((k) => {
+    if (protectedSessionState[k] !== null) {
+      localStorage.setItem(k, protectedSessionState[k]!);
+    }
+  });
+
+  // Limpar cache de baseline em memória
+  try {
+    clearCachedBaseline();
+  } catch (e) {
+    // Ignorar se não aplicável
+  }
+
+  // Emitir evento para todos os ouvintes no sistema
+  try {
+    window.dispatchEvent(
+      new CustomEvent("sigep_data_restored", {
+        detail: { totalRestored, restoredStats, organStats },
+      }),
+    );
+  } catch (e) {
+    // Ignorar se ambiente não-DOM
   }
 
   // 4. Emitir notificação de sucesso
@@ -1046,6 +1140,7 @@ export async function runAutomaticBackup(
   try {
     if (db) {
       const docRef = doc(db, "system_backups", backupId);
+      const isPayloadSmall = jsonString.length < 800000;
       const firestorePayload = {
         id: backupId,
         timestamp: record.timestamp,
@@ -1056,9 +1151,29 @@ export async function runAutomaticBackup(
         organStats: record.organStats,
         collectionStats: record.collectionStats,
         status: record.status,
-        backupData: jsonString.length < 800000 ? backupData : null,
+        backupData: isPayloadSmall ? backupData : null,
       };
       await setDoc(docRef, firestorePayload, { merge: true });
+
+      // Salvar coleções em subdocumentos de backup para garantir integridade mesmo em backups gigantes (> 1MB)
+      for (const [cName, cDocs] of Object.entries(backupData)) {
+        if (!cDocs || !Array.isArray(cDocs) || cDocs.length === 0) continue;
+        try {
+          const subDocRef = doc(db, "system_backups", backupId, "collections", cName);
+          await setDoc(
+            subDocRef,
+            {
+              collectionName: cName,
+              docs: cDocs,
+              count: cDocs.length,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true },
+          );
+        } catch (subErr) {
+          console.warn(`Aviso ao gravar sub-coleção ${cName} do backup no Firestore:`, subErr);
+        }
+      }
     }
   } catch (e) {
     console.warn("Aviso ao salvar backup no Firestore:", e);
@@ -1083,10 +1198,9 @@ export async function runAutomaticBackupIfNeeded(): Promise<SystemBackupRecord |
     if (!db) return null;
 
     // Tentar obter último backup do Firestore (configurações do sistema)
-    const configRef = doc(db, "config_sistema", "backup_metadata");
     const configSnap = await getDocs(collection(db, "config_sistema"));
-    const configDoc = configSnap.docs.find(d => d.id === "backup_metadata");
-    
+    const configDoc = configSnap.docs.find((d) => d.id === "backup_metadata");
+
     let lastTime = 0;
     if (configDoc && configDoc.exists()) {
       lastTime = configDoc.data().lastAutoBackupTime || 0;
@@ -1097,18 +1211,54 @@ export async function runAutomaticBackupIfNeeded(): Promise<SystemBackupRecord |
     if (now - lastTime > 43200000 || lastTime === 0) {
       console.log("A iniciar Backup Automático de rotina dos 4 Órgãos...");
       const record = await runAutomaticBackup(false);
-      
+
       // Atualizar timestamp no Firestore
-      await setDoc(doc(db, "config_sistema", "backup_metadata"), {
-        lastAutoBackupTime: now,
-        lastBackupId: record.id
-      }, { merge: true });
-      
+      await setDoc(
+        doc(db, "config_sistema", "backup_metadata"),
+        {
+          lastAutoBackupTime: now,
+          lastBackupId: record.id,
+        },
+        { merge: true },
+      );
+
       return record;
     }
   } catch (e) {
     console.error("Erro ao verificar/executar backup automático de rotina:", e);
   }
+  return null;
+}
+
+/**
+ * Carrega todos os dados completos de um backup (mesmo se armazenado em subcoleções)
+ */
+export async function getFullBackupDataForRecord(record: SystemBackupRecord): Promise<BackupData | null> {
+  if (record.backupData && typeof record.backupData === "object" && Object.keys(record.backupData).length > 0) {
+    return record.backupData;
+  }
+
+  if (!db) return null;
+
+  try {
+    const subColRef = collection(db, "system_backups", record.id, "collections");
+    const subSnap = await getDocs(subColRef);
+    if (!subSnap.empty) {
+      const data: BackupData = {};
+      subSnap.docs.forEach((d) => {
+        const dData = d.data();
+        if (dData && dData.docs && Array.isArray(dData.docs)) {
+          data[d.id] = dData.docs;
+        }
+      });
+      if (Object.keys(data).length > 0) {
+        return data;
+      }
+    }
+  } catch (e) {
+    console.warn("Aviso ao carregar subcoleção do backup armazenado:", e);
+  }
+
   return null;
 }
 
@@ -1140,12 +1290,18 @@ export async function getStoredBackupsList(): Promise<SystemBackupRecord[]> {
 /**
  * Faz o download do ficheiro JSON de um backup armazenado no sistema
  */
-export function downloadStoredBackupFile(record: SystemBackupRecord) {
-  if (!record.backupData) {
+export async function downloadStoredBackupFile(record: SystemBackupRecord) {
+  let fullData = record.backupData;
+  if (!fullData || Object.keys(fullData).length === 0) {
+    fullData = await getFullBackupDataForRecord(record);
+  }
+
+  if (!fullData || Object.keys(fullData).length === 0) {
     alert("Dados do backup selecionado não disponíveis para download local.");
     return;
   }
-  const jsonString = safeJSONStringify(record.backupData, null, 2);
+
+  const jsonString = safeJSONStringify(fullData, null, 2);
   const blob = new Blob([jsonString], { type: "application/json" });
   const url = URL.createObjectURL(blob);
 
