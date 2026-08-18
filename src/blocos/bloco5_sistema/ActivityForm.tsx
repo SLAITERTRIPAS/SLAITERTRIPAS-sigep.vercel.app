@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   DollarSign,
   Printer,
+  Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { openPrintDocumentWindow } from "../../lib/printUtils";
@@ -3366,6 +3367,64 @@ export default function ActivityForm({
       case 1:
         // Alterado para permitir que o utilizador selecione livremente e não bloquear a identificação
         const isMandatoLocked = false;
+        const detectedAlloc = getUserAllocatedDetails();
+
+        const handleAutoFillAllocation = () => {
+          const allocated = getUserAllocatedDetails();
+          const targetCat =
+            allocated?.cat ||
+            activeUser?.unidade ||
+            activeUser?.unidadeOrganica ||
+            "Unidade Orgânica";
+          const targetDir =
+            allocated?.dir ||
+            activeUser?.direcao ||
+            "";
+          const targetDep =
+            allocated?.dep ||
+            activeUser?.departamento ||
+            "";
+          const targetRep =
+            allocated?.rep ||
+            activeUser?.reparticao ||
+            "";
+          const targetSetor =
+            allocated?.setor ||
+            activeUser?.setor ||
+            activeUser?.sector ||
+            "";
+          const targetResp =
+            allocated?.responsavel ||
+            activeUser?.nome ||
+            activeUser?.name ||
+            activeUser?.fullName ||
+            "";
+          const targetRespEmail =
+            allocated?.responsavelEmail ||
+            activeUser?.email ||
+            "";
+          const targetSource =
+            allocated?.source ||
+            "Repartição de Pessoal (Efetivo Geral)";
+
+          if (targetCat) setSelectedCategory(targetCat);
+          setAllocationSource(targetSource);
+          setFormData((prev) => ({
+            ...prev,
+            unidadeOrganica: targetCat,
+            unidadeCentral:
+              prev.unidadeCentral ||
+              (targetCat === "Unidade Orgânica" ? "Unidade Orgânica" : ""),
+            unidadeSelecionada: targetDir,
+            departamento: targetDep,
+            reparticao: targetRep,
+            setor: targetSetor,
+            responsavel: targetResp || prev.responsavel,
+            responsavelEmail: targetRespEmail || prev.responsavelEmail,
+          }));
+          setAutoFilled(true);
+          setAutoFilledFromDynamic(true);
+        };
 
         return (
           <div className="space-y-6">
@@ -3374,52 +3433,40 @@ export default function ActivityForm({
             </h4>
 
             {activeUser && (
-              <div className="bg-blue-50/80 border border-blue-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
-                <div className="space-y-0.5">
-                  <p className="text-xs font-bold text-blue-950">
+              <div className="bg-blue-50/90 border border-blue-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-xs">
+                <div className="space-y-1">
+                  <p className="text-xs font-black text-blue-950 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
                     Colaborador Logado: {activeUser.nome || activeUser.name || activeUser.fullName || activeUser.email || "Utilizador"}
                   </p>
-                  <p className="text-[11px] text-blue-700">
-                    {activeUser.direcao ? `Direção: ${activeUser.direcao}` : "Alocação institucional detetada automaticamente"}
-                    {activeUser.departamento ? ` • Departamento: ${activeUser.departamento}` : ""}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-blue-900 font-medium">
+                    <span className="bg-blue-100 text-blue-950 px-2 py-0.5 rounded-md border border-blue-200 font-semibold">
+                      Órgão: <strong>{detectedAlloc?.cat || activeUser.unidade || activeUser.unidadeOrganica || "Unidade Orgânica"}</strong>
+                    </span>
+                    <span className="bg-blue-100 text-blue-950 px-2 py-0.5 rounded-md border border-blue-200 font-semibold">
+                      Direção: <strong>{detectedAlloc?.dir || activeUser.direcao || "---"}</strong>
+                    </span>
+                    <span className="bg-blue-100 text-blue-950 px-2 py-0.5 rounded-md border border-blue-200 font-semibold">
+                      Departamento: <strong>{detectedAlloc?.dep || activeUser.departamento || "---"}</strong>
+                    </span>
+                    {(detectedAlloc?.rep || activeUser.reparticao) && (
+                      <span className="bg-blue-100 text-blue-950 px-2 py-0.5 rounded-md border border-blue-200 font-semibold">
+                        Repartição: <strong>{detectedAlloc?.rep || activeUser.reparticao}</strong>
+                      </span>
+                    )}
+                    {(detectedAlloc?.setor || activeUser.setor || activeUser.sector) && (
+                      <span className="bg-blue-100 text-blue-950 px-2 py-0.5 rounded-md border border-blue-200 font-semibold">
+                        Setor: <strong>{detectedAlloc?.setor || activeUser.setor || activeUser.sector}</strong>
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    const allocated = getUserAllocatedDetails();
-                    if (allocated) {
-                      if (allocated.cat) setSelectedCategory(allocated.cat);
-                      if (allocated.source) setAllocationSource(allocated.source);
-                      setFormData((prev) => ({
-                        ...prev,
-                        unidadeOrganica: allocated.cat || prev.unidadeOrganica,
-                        unidadeSelecionada: allocated.dir || prev.unidadeSelecionada,
-                        departamento: allocated.dep || prev.departamento,
-                        reparticao: allocated.rep || prev.reparticao,
-                        setor: allocated.setor || prev.setor,
-                        responsavel: allocated.responsavel || activeUser.nome || activeUser.name || activeUser.fullName || "",
-                        responsavelEmail: allocated.responsavelEmail || activeUser.email || "",
-                      }));
-                      setAutoFilled(true);
-                    } else if (activeUser.unidade || activeUser.direcao || activeUser.departamento) {
-                      const directCat = activeUser.unidade || activeUser.unidadeOrganica || "Unidade Orgânica";
-                      if (directCat) setSelectedCategory(directCat);
-                      setFormData((prev) => ({
-                        ...prev,
-                        unidadeOrganica: directCat || prev.unidadeOrganica,
-                        unidadeSelecionada: activeUser.direcao || prev.unidadeSelecionada,
-                        departamento: activeUser.departamento || prev.departamento,
-                        reparticao: activeUser.reparticao || prev.reparticao,
-                        setor: activeUser.setor || prev.setor,
-                        responsavel: prev.responsavel || activeUser.nome || activeUser.name || activeUser.fullName || "",
-                        responsavelEmail: prev.responsavelEmail || activeUser.email || "",
-                      }));
-                      setAutoFilled(true);
-                    }
-                  }}
-                  className="px-3.5 py-2 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5"
+                  onClick={handleAutoFillAllocation}
+                  className="px-4 py-2 bg-[#121c60] hover:bg-blue-900 text-white rounded-xl text-xs font-black shadow-md transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
                 >
+                  <Sparkles size={14} className="text-amber-300 animate-spin" />
                   Auto-Preencher Órgão, Direção e Departamento
                 </button>
               </div>
@@ -3478,38 +3525,47 @@ export default function ActivityForm({
                 className="bg-blue-50 border border-blue-200 text-blue-950 p-4 rounded-2xl flex items-start gap-3 shadow-sm"
               >
                 <Info className="text-blue-600 shrink-0 mt-0.5" size={18} />
-                <div className="text-xs space-y-1">
-                  <p className="font-bold text-blue-900">
-                    Alocação Preenchida Automaticamente (Localização Exata)
-                  </p>
-                  <p>
+                <div className="text-xs space-y-2 w-full">
+                  <div className="flex items-center justify-between">
+                    <p className="font-black text-blue-900 text-xs uppercase tracking-wide">
+                      Alocação Preenchida Automaticamente (Localização Exata)
+                    </p>
+                    <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold border border-blue-200">
+                      Sincronizado
+                    </span>
+                  </div>
+                  <p className="text-blue-900 font-medium">
                     O sistema localizou com sucesso a sua afetação e alocação
                     consultando a{" "}
                     <strong>
-                      {allocationSource || "Repartição de Pessoal"}
+                      {allocationSource || detectedAlloc?.source || "Repartição de Pessoal (Efetivo Geral)"}
                     </strong>
                     :
                   </p>
-                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-blue-200 font-medium">
-                    <div>
-                      <span className="font-bold text-blue-900">Órgão:</span>{" "}
-                      {selectedCategory || "---"}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2 border-t border-blue-200/80 font-medium">
+                    <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+                      <span className="font-bold text-blue-900 block text-[10px] uppercase tracking-wider mb-0.5">Órgão</span>
+                      <span className="text-blue-950 font-black text-xs leading-snug">
+                        {formData.unidadeOrganica || selectedCategory || detectedAlloc?.cat || "Unidade Orgânica"}
+                      </span>
                     </div>
-                    <div>
-                      <span className="font-bold text-blue-900">Direção:</span>{" "}
-                      {formData.unidadeSelecionada || "---"}
+                    <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+                      <span className="font-bold text-blue-900 block text-[10px] uppercase tracking-wider mb-0.5">Direção</span>
+                      <span className="text-blue-950 font-black text-xs leading-snug">
+                        {formData.unidadeSelecionada || detectedAlloc?.dir || "---"}
+                      </span>
                     </div>
-                    <div>
-                      <span className="font-bold text-blue-900">
-                        Departamento:
-                      </span>{" "}
-                      {formData.departamento || "---"}
+                    <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+                      <span className="font-bold text-blue-900 block text-[10px] uppercase tracking-wider mb-0.5">Departamento</span>
+                      <span className="text-blue-950 font-black text-xs leading-snug">
+                        {formData.departamento || detectedAlloc?.dep || "---"}
+                      </span>
                     </div>
-                    <div>
-                      <span className="font-bold text-blue-900">
-                        Repartição:
-                      </span>{" "}
-                      {formData.reparticao || "---"}
+                    <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+                      <span className="font-bold text-blue-900 block text-[10px] uppercase tracking-wider mb-0.5">Repartição / Setor</span>
+                      <span className="text-blue-950 font-black text-xs leading-snug">
+                        {formData.reparticao || detectedAlloc?.rep || formData.setor || detectedAlloc?.setor || "Geral / Sede"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -3614,48 +3670,36 @@ export default function ActivityForm({
                   <option value="">Selecione...</option>
                   {(() => {
                     const direction = formData.unidadeSelecionada;
+                    let finalDeps: string[] = [];
                     if (direction) {
                       const correctKey = Object.keys(DEPARTAMENTOS).find(
                         (k) => k.toLowerCase() === direction.toLowerCase(),
                       );
-                      const list = correctKey
-                        ? DEPARTAMENTOS[correctKey]
-                        : null;
-
-                      const depKey = Object.keys(DEPARTAMENTOS).find(
-                        (k) => k.toLowerCase() === direction.toLowerCase(),
-                      );
-                      const backupList = depKey ? DEPARTAMENTOS[depKey] : [];
-
-                      const finalDeps = list || backupList || [];
-                      if (finalDeps.length === 0) {
-                        return (
-                          <option disabled>
-                            Sem departamentos cadastrados
-                          </option>
-                        );
-                      }
-                      return Array.from(new Set(finalDeps)).map((d, idx) => (
-                        <option key={`${d}-${idx}`} value={d}>
-                          {d}
-                        </option>
-                      ));
+                      finalDeps = correctKey ? [...DEPARTAMENTOS[correctKey]] : [];
                     } else {
-                      // If no direction is selected yet, let them choose from any department and trigger auto-fill!
                       const allDepsSet = new Set<string>();
                       Object.values(DEPARTAMENTOS).forEach((arr) =>
                         arr.forEach((d) => allDepsSet.add(d)),
                       );
-                      Object.values(DEPARTAMENTOS).forEach((arr) =>
-                        arr.forEach((d) => allDepsSet.add(d)),
-                      );
-                      const allDeps = Array.from(allDepsSet).sort();
-                      return allDeps.map((d, idx) => (
-                        <option key={`${d}-${idx}`} value={d}>
-                          {d}
-                        </option>
-                      ));
+                      finalDeps = Array.from(allDepsSet).sort();
                     }
+
+                    if (formData.departamento && !finalDeps.includes(formData.departamento)) {
+                      finalDeps = [formData.departamento, ...finalDeps];
+                    }
+
+                    if (finalDeps.length === 0) {
+                      return (
+                        <option disabled>
+                          Sem departamentos cadastrados
+                        </option>
+                      );
+                    }
+                    return Array.from(new Set(finalDeps)).map((d, idx) => (
+                      <option key={`${d}-${idx}`} value={d}>
+                        {d}
+                      </option>
+                    ));
                   })()}
                 </select>
               </div>
@@ -3717,9 +3761,12 @@ export default function ActivityForm({
                         const correctKey = Object.keys(REPARTICOES).find(
                           (k) => k.toLowerCase() === dept.toLowerCase(),
                         );
-                        const finalReps = correctKey
-                          ? REPARTICOES[correctKey]
+                        let finalReps = correctKey
+                          ? [...REPARTICOES[correctKey]]
                           : [];
+                        if (formData.reparticao && !finalReps.includes(formData.reparticao)) {
+                          finalReps = [formData.reparticao, ...finalReps];
+                        }
                         if (finalReps.length === 0) {
                           return (
                             <option disabled>
@@ -3760,15 +3807,18 @@ export default function ActivityForm({
                         const correctKey = Object.keys(SECTORES).find(
                           (k) => k.toLowerCase() === rep.toLowerCase(),
                         );
-                        const finalSectors = correctKey
-                          ? SECTORES[correctKey]
+                        let finalSectors = correctKey
+                          ? [...SECTORES[correctKey]]
                           : [];
+                        if (formData.setor && !finalSectors.includes(formData.setor)) {
+                          finalSectors = [formData.setor, ...finalSectors];
+                        }
                         if (finalSectors.length === 0) {
                           return (
                             <option disabled>Sem setores cadastrados</option>
                           );
                         }
-                        return finalSectors.map((s, idx) => (
+                        return Array.from(new Set(finalSectors)).map((s, idx) => (
                           <option key={`${s}-${idx}`} value={s}>
                             {s}
                           </option>

@@ -7,8 +7,16 @@ import {
   getDocFromServer,
   initializeFirestore,
   terminate,
+  setLogLevel,
 } from "firebase/firestore";
 import firebaseConfigFile from "../../firebase-applet-config.json";
+
+// Silenciar avisos verbosos de polling/offline do SDK Firestore em ambientes iframe/sandbox
+try {
+  setLogLevel("error");
+} catch {
+  // Ignora se não suportado
+}
 
 // Configuração flexível: suporta firebase-applet-config.json embutido e variáveis de ambiente (ex: Vercel)
 const metaEnv = typeof import.meta !== "undefined" ? (import.meta as any).env || {} : {};
@@ -61,7 +69,18 @@ let dbInstance;
 try {
   // @ts-ignore
   if (!globalThis._firebase_db) {
-    dbInstance = getFirestore(app, dbIdToUse);
+    try {
+      dbInstance = initializeFirestore(
+        app,
+        {
+          experimentalAutoDetectLongPolling: true,
+          ignoreUndefinedProperties: true,
+        },
+        dbIdToUse
+      );
+    } catch {
+      dbInstance = getFirestore(app, dbIdToUse);
+    }
     // @ts-ignore
     globalThis._firebase_db = dbInstance;
   } else {

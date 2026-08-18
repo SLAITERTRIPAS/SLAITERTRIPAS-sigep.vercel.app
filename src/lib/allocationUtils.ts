@@ -220,7 +220,7 @@ export function getUserAllocatedDetails(
       }
 
       return {
-        cat: "Unidade orgânica",
+        cat: "Unidade Orgânica",
         dir: "Divisão de Engenharia",
         dep: depNormalized,
         rep: "",
@@ -454,7 +454,7 @@ export function getUserAllocatedDetails(
     }
 
     return {
-      cat: "Unidade orgânica",
+      cat: "Unidade Orgânica",
       dir: "Divisão de Engenharia",
       dep: depNormalized,
       rep: "",
